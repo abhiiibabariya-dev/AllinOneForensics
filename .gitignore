@@ -1,0 +1,4 @@
+aiof/__pycache__/
+cases/
+tests/.pytest_cache/
+.DS_Store
