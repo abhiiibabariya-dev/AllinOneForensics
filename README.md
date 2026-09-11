@@ -55,6 +55,27 @@ aiof ui --case IR-2026-091
 | **Timeline** | Super-timeline merge with filter |
 | **Reports** | HTML, DOCX, PDF with custody, findings, IOCs, MITRE ATT&CK |
 
+## Documentation
+
+Comprehensive forensic reference documentation lives in [`docs/`](docs/):
+
+| Doc | Topic |
+|-----|-------|
+| [01](docs/01-computer-forensics-fundamentals.md) | Computer Forensics Fundamentals, Order of Volatility, Live vs Dead |
+| [02](docs/02-windows-forensics.md) | Windows Forensics: MFT, Registry, Event Logs, Prefetch, LNK, JumpLists |
+| [03](docs/03-memory-forensics.md) | Memory Forensics: acquisition, Volatility 3, injection/credential analysis |
+| [04](docs/04-network-forensics.md) | Network Forensics: PCAP, DNS, JA3, beaconing, flow analysis |
+| [05](docs/05-mobile-forensics.md) | Mobile Forensics: Android/iOS artifacts and acquisition |
+| [06](docs/06-cloud-forensics.md) | Cloud Forensics: AWS/Azure/GCP audit log analysis |
+| [07](docs/07-email-forensics.md) | Email Forensics: headers, SPF/DKIM/DMARC, PST/OST analysis |
+| [08](docs/08-malware-forensics.md) | Malware Forensics: static/dynamic analysis, YARA, IOC extraction |
+| [09](docs/09-timeline-analysis.md) | Timeline Analysis: super-timelines, cross-artifact correlation |
+| [10](docs/10-forensic-tools.md) | Forensic Tools reference catalog and selection guide |
+| [11](docs/11-dfir-workflow.md) | Complete DFIR Investigation Workflow (NIST SP 800-86) |
+| [12](docs/12-case-studies.md) | Realistic Forensic Case Studies (ransomware, insider, APT, cloud, mobile) |
+| [13](docs/13-interview-questions.md) | Forensic Interview & Scenario-Based Questions |
+| [14](docs/14-quick-reference-tables.md) | Quick-Reference Tables for lookup during investigations |
+
 ## Offline-First
 
 Every module works with zero network. Online enrichment is **disabled** unless you pass `--online`. Isolated machines supported.

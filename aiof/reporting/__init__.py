@@ -1,105 +1,216 @@
-import json
-import shutil
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import List, Dict, Any
+from __future__ import annotations
 
+import html
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from aiof import __version__
 from aiof.core.case import Case
 
 
-class ReportGenerator:
-    """Generate HTML, DOCX, and PDF reports."""
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
+
+class ReportGenerator:
     def __init__(self, case: Case):
         self.case = case
         self.reports_dir = case.path / "reports"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_html(self, findings: List[Dict], evidence: List[Dict]) -> Path:
-        """Generate HTML report."""
-        html_content = f"""
-<!DOCTYPE html>
-<html>
+    def generate(
+        self,
+        formats: list[str],
+        findings: list[dict],
+        evidence: list[dict],
+        iocs: list[dict] | None = None,
+        timeline: list[dict] | None = None,
+    ) -> list[Path]:
+        generated = []
+        for fmt in formats:
+            fmt = fmt.lower().strip()
+            if fmt == "html":
+                generated.append(self.generate_html(findings, evidence, iocs, timeline))
+            elif fmt == "docx":
+                generated.append(self.generate_docx(findings, evidence, iocs, timeline))
+            elif fmt == "pdf":
+                generated.append(self.generate_pdf(findings, evidence, iocs, timeline))
+        return generated
+
+    def generate_html(
+        self,
+        findings: list[dict],
+        evidence: list[dict],
+        iocs: list[dict] | None = None,
+        timeline: list[dict] | None = None,
+    ) -> Path:
+        iocs = iocs or []
+        timeline = timeline or []
+        finding_rows = "".join(
+            f"<tr><td>{html.escape(str(item.get('severity', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('description', '')))}</td>"
+            f"<td>{html.escape(str(item.get('detail', '')))}</td></tr>"
+            for item in findings
+        ) or "<tr><td colspan='4'>No findings.</td></tr>"
+        evidence_rows = "".join(
+            f"<tr><td>{html.escape(str(item.get('path', '')))}</td>"
+            f"<td>{html.escape(str(item.get('size', item.get('size_bytes', ''))))}</td>"
+            f"<td>{html.escape(str(item.get('hash', item.get('hash_sha256', ''))))}</td></tr>"
+            for item in evidence
+        ) or "<tr><td colspan='3'>No evidence.</td></tr>"
+        ioc_rows = "".join(
+            f"<tr><td>{html.escape(str(item.get('type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('value', '')))}</td>"
+            f"<td>{html.escape(str(item.get('location', '')))}</td></tr>"
+            for item in iocs
+        ) or "<tr><td colspan='3'>No IOC matches.</td></tr>"
+        timeline_rows = "".join(
+            f"<tr><td>{html.escape(str(item.get('timestamp', '')))}</td>"
+            f"<td>{html.escape(str(item.get('module', '')))}</td>"
+            f"<td>{html.escape(str(item.get('event', '')))}</td></tr>"
+            for item in timeline[:200]
+        ) or "<tr><td colspan='3'>No timeline events.</td></tr>"
+        custody_rows = "".join(
+            f"<tr><td>{html.escape(str(item.get('at', '')))}</td>"
+            f"<td>{html.escape(str(item.get('action', '')))}</td>"
+            f"<td>{html.escape(str(item.get('actor', '')))}</td>"
+            f"<td>{html.escape(str(item.get('detail', '')))}</td></tr>"
+            for item in self.case.custody
+        ) or "<tr><td colspan='4'>No custody events.</td></tr>"
+        content = f"""<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>Forensic Report - {self.case.name}</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; }}
-        h1 {{ color: #2c3e50; }}
-        h2 {{ color: #3498db; border-bottom: 2px solid #3498db; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background-color: #2c3e50; color: white; }}
-        tr:nth-child(even) {{ background-color: #f2f2f2; }}
-        .high {{ color: #e74c3c; font-weight: bold; }}
-        .medium {{ color: #f39c12; font-weight: bold; }}
-        .low {{ color: #27ae60; font-weight: bold; }}
-    </style>
+  <meta charset="utf-8">
+  <title>Forensic Report — {html.escape(self.case.name)}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 40px; color: #1b1b1b; }}
+    h1, h2 {{ color: #12324d; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
+    th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }}
+    th {{ background: #12324d; color: #fff; }}
+  </style>
 </head>
 <body>
-    <h1>Digital Forensic Report</h1>
-    <h2>Case Information</h2>
-    <p><strong>Case ID:</strong> {self.case.case_id}</p>
-    <p><strong>Case Name:</strong> {self.case.name}</p>
-    <p><strong>Examiner:</strong> {self.case.examiner}</p>
-    <p><strong>Created:</strong> {self.case.created_at}</p>
-    <p><strong>Status:</strong> {self.case.status}</p>
-
-    <h2>Evidence Inventory</h2>
-    <table>
-        <tr><th>File</th><th>Size</th><th>SHA-256</th></tr>
-        {"".join(f'<tr><td>{e.get("path", "N/A")}</td><td>{e.get("size", "N/A")}</td><td>{e.get("hash", "N/A")}</td></tr>' for e in evidence)}
-    </table>
-
-    <h2>Findings</h2>
-    <table>
-        <tr><th>Severity</th><th>Category</th><th>Description</th></tr>
-        {"".join(f'<tr><td class="{f.get("severity", "low").lower()}">{f.get("severity", "N/A")}</td><td>{f.get("category", "N/A")}</td><td>{f.get("description", "N/A")}</td></tr>' for f in findings)}
-    </table>
-
-    <h2>Methodology</h2>
-    <p>This report was generated using AllinOneForensics. All evidence was processed in read-only mode with cryptographic hashes computed for chain of custody.</p>
-
-    <h2>Chain of Custody</h2>
-    <p>See evidence table above for file hashes and timestamps.</p>
+  <h1>Digital Forensic Report</h1>
+  <p>Generated by AllinOneForensics {html.escape(__version__)} at {_now()} UTC.</p>
+  <h2>1. Case identification</h2>
+  <p><b>Case ID:</b> {html.escape(self.case.case_id)}<br>
+     <b>Name:</b> {html.escape(self.case.name)}<br>
+     <b>Examiner:</b> {html.escape(self.case.examiner)}<br>
+     <b>Created:</b> {html.escape(self.case.created_at)}</p>
+  <h2>2. Scope and authorization</h2>
+  <p>This report is intended for authorized DFIR use only. Collection and parsing were performed read-only against ingested evidence copies.</p>
+  <h2>3. Evidence inventory</h2>
+  <table><tr><th>Path</th><th>Size</th><th>SHA-256</th></tr>{evidence_rows}</table>
+  <h2>4. Methodology</h2>
+  <p>AllinOneForensics hashed each exhibit with SHA-256, parsed host/mobile/network/cloud artifacts offline, matched local IOCs, and merged timestamps into a super-timeline.</p>
+  <h2>5. Findings</h2>
+  <table><tr><th>Severity</th><th>Category</th><th>Description</th><th>Detail</th></tr>{finding_rows}</table>
+  <h2>6. IOCs</h2>
+  <table><tr><th>Type</th><th>Value</th><th>Location</th></tr>{ioc_rows}</table>
+  <h2>7. Timeline</h2>
+  <table><tr><th>Timestamp</th><th>Module</th><th>Event</th></tr>{timeline_rows}</table>
+  <h2>8. Chain of custody</h2>
+  <table><tr><th>Time</th><th>Action</th><th>Actor</th><th>Detail</th></tr>{custody_rows}</table>
+  <h2>9. Recommendations</h2>
+  <p>Validate high-severity findings against original exhibits, preserve hashes, and expand collection where parsers reported skipped artifacts.</p>
 </body>
 </html>
 """
-        report_path = self.reports_dir / f"case_report_{self.case.case_id}.html"
-        report_path.write_text(html_content)
-        return report_path
+        path = self.reports_dir / f"case_report_{self.case.case_id}.html"
+        path.write_text(content, encoding="utf-8")
+        return path
 
-    def generate_docx(self, findings: List[Dict], evidence: List[Dict]) -> Path:
-        """Generate DOCX report (placeholder)."""
-        docx_content = {
-            "case": self.case.case_id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "evidence": evidence,
-            "findings": findings,
-            "sections": [
-                "Case Identification",
-                "Scope and Authorization",
-                "Evidence Inventory",
-                "Methodology",
-                "Findings",
-                "IOCs",
-                "Timeline",
-                "Recommendations",
-                "Appendix"
-            ]
-        }
-        report_path = self.reports_dir / f"case_report_{self.case.case_id}.docx"
-        report_path.write_text(json.dumps(docx_content, indent=2))
-        return report_path
+    def generate_docx(
+        self,
+        findings: list[dict],
+        evidence: list[dict],
+        iocs: list[dict] | None = None,
+        timeline: list[dict] | None = None,
+    ) -> Path:
+        from docx import Document
 
-    def generate_pdf(self, findings: List[Dict], evidence: List[Dict]) -> Path:
-        """Generate PDF report (placeholder)."""
-        pdf_content = {
-            "case": self.case.case_id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "evidence": evidence,
-            "findings": findings,
-            "format": "pdf_placeholder"
-        }
-        report_path = self.reports_dir / f"case_report_{self.case.case_id}.pdf"
-        report_path.write_text(json.dumps(pdf_content, indent=2))
-        return report_path
+        iocs = iocs or []
+        timeline = timeline or []
+        doc = Document()
+        doc.add_heading("Digital Forensic Report", 0)
+        doc.add_paragraph(f"AllinOneForensics {__version__} — generated {_now()}")
+        doc.add_heading("Case identification", level=1)
+        doc.add_paragraph(f"Case ID: {self.case.case_id}")
+        doc.add_paragraph(f"Name: {self.case.name}")
+        doc.add_paragraph(f"Examiner: {self.case.examiner}")
+        doc.add_heading("Evidence inventory", level=1)
+        table = doc.add_table(rows=1, cols=3)
+        table.rows[0].cells[0].text = "Path"
+        table.rows[0].cells[1].text = "Size"
+        table.rows[0].cells[2].text = "SHA-256"
+        for item in evidence:
+            row = table.add_row().cells
+            row[0].text = str(item.get("path", ""))
+            row[1].text = str(item.get("size", item.get("size_bytes", "")))
+            row[2].text = str(item.get("hash", item.get("hash_sha256", "")))
+        doc.add_heading("Findings", level=1)
+        for item in findings or [{"description": "No findings."}]:
+            doc.add_paragraph(
+                f"[{item.get('severity', 'Info')}] {item.get('category', '')}: {item.get('description', '')} {item.get('detail', '')}"
+            )
+        doc.add_heading("IOCs", level=1)
+        for item in iocs or [{"value": "No IOC matches."}]:
+            doc.add_paragraph(f"{item.get('type', '')} {item.get('value', '')} @ {item.get('location', '')}")
+        doc.add_heading("Timeline excerpt", level=1)
+        for item in timeline[:50]:
+            doc.add_paragraph(f"{item.get('timestamp', '')} [{item.get('module', '')}] {item.get('event', '')}")
+        doc.add_heading("Chain of custody", level=1)
+        for item in self.case.custody:
+            doc.add_paragraph(f"{item.get('at', '')} {item.get('action', '')} by {item.get('actor', '')}: {item.get('detail', '')}")
+        path = self.reports_dir / f"case_report_{self.case.case_id}.docx"
+        doc.save(path)
+        return path
+
+    def generate_pdf(
+        self,
+        findings: list[dict],
+        evidence: list[dict],
+        iocs: list[dict] | None = None,
+        timeline: list[dict] | None = None,
+    ) -> Path:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+        iocs = iocs or []
+        timeline = timeline or []
+        path = self.reports_dir / f"case_report_{self.case.case_id}.pdf"
+        doc = SimpleDocTemplate(str(path), pagesize=letter)
+        styles = getSampleStyleSheet()
+        story: list[Any] = [
+            Paragraph("Digital Forensic Report", styles["Title"]),
+            Paragraph(f"AllinOneForensics {__version__} — {_now()}", styles["Normal"]),
+            Spacer(1, 12),
+            Paragraph(f"Case ID: {self.case.case_id}", styles["Normal"]),
+            Paragraph(f"Name: {self.case.name}", styles["Normal"]),
+            Paragraph(f"Examiner: {self.case.examiner}", styles["Normal"]),
+            Spacer(1, 12),
+            Paragraph("Evidence", styles["Heading2"]),
+        ]
+        for item in evidence:
+            story.append(Paragraph(html.escape(str(item.get("path", ""))), styles["Normal"]))
+            story.append(Paragraph(html.escape(str(item.get("hash", item.get("hash_sha256", "")))), styles["Code"]))
+        story.append(Paragraph("Findings", styles["Heading2"]))
+        for item in findings or [{"description": "No findings."}]:
+            story.append(
+                Paragraph(
+                    html.escape(f"[{item.get('severity', 'Info')}] {item.get('description', '')} {item.get('detail', '')}"),
+                    styles["Normal"],
+                )
+            )
+        story.append(Paragraph("IOCs", styles["Heading2"]))
+        for item in iocs or [{"value": "No IOC matches."}]:
+            story.append(Paragraph(html.escape(str(item.get("value", ""))), styles["Normal"]))
+        story.append(Paragraph("Timeline excerpt", styles["Heading2"]))
+        for item in timeline[:40]:
+            story.append(Paragraph(html.escape(f"{item.get('timestamp', '')} {item.get('event', '')}"), styles["Normal"]))
+        doc.build(story)
+        return path

@@ -1,4 +1,7 @@
 aiof/__pycache__/
+**/__pycache__/
 cases/
 tests/.pytest_cache/
+.pytest_cache/
 .DS_Store
+*.pyc

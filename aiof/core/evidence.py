@@ -1,41 +1,61 @@
+from __future__ import annotations
+
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from aiof.core.case import Case
-from aiof.core.config import DEFAULT_CONFIG
 
 
 def compute_hash_sha256(path: Path, chunk_size: int = 8192) -> str:
-    """Compute SHA-256 of a file."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(chunk_size):
-            h.update(chunk)
-    return h.hexdigest()
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def ingest_to_case(case: Case, source_path: str, analyst: str = "Unknown") -> str:
-    """
-    Copy evidence into case folder and return the new path.
-    """
+def _record_file(case: Case, dest: Path, analyst: str) -> None:
+    case.add_evidence(
+        path=str(dest),
+        hash_sha256=compute_hash_sha256(dest),
+        size_bytes=dest.stat().st_size,
+        analyst=analyst,
+    )
+
+
+def ingest_to_case(case: Case, source_path: str, analyst: str = "Unknown") -> List[Path]:
     source = Path(source_path).expanduser()
     if not source.exists():
         raise FileNotFoundError(f"Evidence not found: {source}")
 
-    dest = case.path / "evidence" / source.name
-    shutil.copy2(source, dest)
-    hash_sha256 = compute_hash_sha256(dest)
-    size_bytes = dest.stat().st_size
+    dest_root = case.path / "evidence"
+    dest_root.mkdir(parents=True, exist_ok=True)
+    ingested: List[Path] = []
 
-    case.add_evidence(dest=str(dest), hash_sha256=hash_sha256, size_bytes=size_bytes, analyst=analyst)
-    return str(dest)
+    if source.is_file():
+        dest = dest_root / source.name
+        shutil.copy2(source, dest)
+        _record_file(case, dest, analyst)
+        ingested.append(dest)
+        return ingested
+
+    dest = dest_root / source.name
+    shutil.copytree(source, dest, dirs_exist_ok=True)
+    for file_path in dest.rglob("*"):
+        if file_path.is_file():
+            _record_file(case, file_path, analyst)
+            ingested.append(file_path)
+    return ingested
 
 
 def find_evidence(case: Case, extension: Optional[str] = None) -> list[Path]:
-    """Return all evidence files matching optional extension."""
-    paths = list((case.path / "evidence").glob("*"))
+    evidence_dir = case.path / "evidence"
+    if not evidence_dir.exists():
+        return []
+    paths = [p for p in evidence_dir.rglob("*") if p.is_file()]
     if extension:
-        return [p for p in paths if p.suffix == extension]
+        suffix = extension if extension.startswith(".") else f".{extension}"
+        return [p for p in paths if p.suffix.lower() == suffix.lower()]
     return paths
