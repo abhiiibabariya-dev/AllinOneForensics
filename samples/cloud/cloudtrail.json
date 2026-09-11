@@ -1,0 +1,1 @@
+[{"Records":[{"eventTime":"2026-09-09T10:00:00Z","eventName":"ConsoleLogin","userIdentity":{"userName":"admin"},"sourceIPAddress":"203.0.113.88","eventSource":"signin.amazonaws.com","additionalEventData":{"MFAUsed":"No"}}]}]
