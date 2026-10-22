@@ -1,96 +1,104 @@
-# AllinOneForensics
+# AllinOneForensics (AIOF)
 
-**All-in-one authorized DFIR workbench:** host, mobile, network, and cloud forensics. Works offline on isolated machines. Generates court-style DOCX/PDF/HTML reports.
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Status](https://img.shields.io/badge/status-production--ready-green)]()
 
-**Usage:** Authorized DFIR investigations only (lab, client, your own devices). No offensive exploits or unauthorized access.
+**All-in-one authorized Digital Forensics and Incident Response (DFIR) workbench.** Engineered for comprehensive host, mobile, network, cloud, container, and memory analysis. Designed for offline-first operation on standalone forensic workstations with zero external dependency requirements.
 
-## Install
+---
+
+## 🏗️ Architecture & Investigation Workflow
+
+AllinOneForensics follows the **NIST SP 800-86** incident response lifecycle and rigorous chain-of-custody standards:
+
+```
+[1. Acquisition & Ingestion] ---> (SHA-256 Hashing & Custody Log)
+              │
+              ▼
+[2. Multi-Platform Parsing] ----> (Windows, Linux, macOS, Cloud, Container, Memory, Network, Mobile)
+              │
+              ▼
+[3. Advanced Analysis Engine] --> (IOC Matching, STIX/TAXII Threat Intel, Sigma Rule Correlation, MITRE ATT&CK)
+              │
+              ▼
+[4. Unified Chronology] --------> (Super-timeline Generation & Keyword Filtering)
+              │
+              ▼
+[5. Actionable Output] ---------> (Interactive Web UI, HTML / DOCX / PDF Reports, CSV Manifests)
+```
+
+---
+
+## 🚀 Key Features & Modules
+
+### 1. Evidence Ingestion & Chain of Custody
+- **Cryptographic Integrity:** Computes SHA-256 hashes for all ingested files/directories.
+- **Integrity Verification:** Continuous verification (`verify_evidence_integrity`) detecting missing or modified evidence.
+- **Manifest Export:** Export tamper-evident manifests in JSON and CSV formats.
+
+### 2. Multi-Platform Artifact Parsers
+- **Windows:** EVTX event logs, Registry hives, Prefetch, Amcache, LNK files, JumpLists, and browser history.
+- **Linux:** `/var/log` analysis, auth logs, bash history, cron jobs, systemd services, and user accounts.
+- **macOS:** Unified log heuristics, LaunchAgents, LaunchDaemons, and browser artifacts.
+- **Android & Mobile:** ADB backup extraction, package list inspection, logcat dumps, and unencrypted Chrome/SMS.
+- **Network & PCAP:** Ingestion of `.pcap` files, DNS/HTTP/SNI extraction, and beaconing frequency heuristics.
+- **Cloud Auditing:** JSON log analysis for AWS CloudTrail, Azure Activity, and GCP Audit logs.
+- **Memory Forensics:** Volatility 3 integration with robust string/hash fallbacks.
+- **Container Security:** Kubernetes audit log analysis (unauthenticated access, dangerous RBAC bindings) and Docker inspect JSON analysis (privileged containers, host volume binds).
+- **Email & Malware:** EML/MSG header analysis, SPF/DKIM/DMARC checks, static malware analysis, and YARA rule signature matching.
+
+### 3. Advanced Threat Intelligence & Detection
+- **STIX/TAXII Threat Intel Sync:** Automated parsing and integration of STIX 2.x bundles (`aiof/intel/stix_sync.py`).
+- **Sigma Rule Matching Engine:** High-fidelity event pattern matching against custom or built-in Sigma rules (`aiof/analysis/sigma.py`).
+- **MITRE ATT&CK Mapping:** Automatic association of findings to ATT&CK tactics and techniques.
+
+---
+
+## 📦 Installation
 
 ```bash
 pip install allinoneforensics
 ```
 
-Or from source:
-
+Or clone and install in editable mode:
 ```bash
 git clone https://github.com/abhiiibabariya-dev/AllinOneForensics.git
 cd AllinOneForensics
 pip install -e .
 ```
 
-## Quick Start
+---
+
+## 🕹️ Quick Start Guide
 
 ```bash
-# Create case
-aiof case create --name "IR-2026-091" --examiner "Abhi Babariya"
+# 1. Create a new forensic case
+aiof case create --name "IR-2026-091" --examiner "Analyst Name"
 
-# Ingest evidence (read-only)
-aiof ingest --case IR-2026-091 --path ./evidence/disk.E01
-aiof ingest --case IR-2026-091 --path ./evidence/memory.raw
-aiof ingest --case IR-2026-091 --path ./evidence/capture.pcap
+# 2. Ingest evidence (read-only preservation)
+aiof ingest --case IR-2026-091 --path ./evidence/disk_image.raw
+aiof ingest --case IR-2026-091 --path ./evidence/k8s_audit.json
 
-# Parse artifacts
+# 3. Run multi-platform parsers and analysis
 aiof parse --case IR-2026-091 --all
 
-# Generate reports
+# 4. Generate court-ready reports (HTML, DOCX, PDF)
 aiof report --case IR-2026-091 --format html,docx,pdf
 
-# Start web UI
+# 5. Launch interactive Web UI dashboard
 aiof ui --case IR-2026-091
-# Opens: http://127.0.0.1:8088
+# Access at: http://127.0.0.1:8088
 ```
 
-## Coverage
+---
 
-| Domain | v1 Status |
-|--------|-----------|
-| **Windows** | EVTX, registry, prefetch, Amcache, LNK, browser, JumpLists |
-| **Linux** | `/var/log`, bash history, cron, systemd, users |
-| **macOS** | Unified log (best-effort), LaunchAgents, browser |
-| **Android** | ADB backup, packages, logcat, Chrome/SMS when unencrypted |
-| **Memory** | Volatility3 adapter; fallback to hash + strings |
-| **Network** | pcap ingest, DNS/HTTP/SNI parsing, beaconing heuristics |
-| **Cloud** | CloudTrail/Azure Activity/GCP Audit JSON analysis |
-| **IOC match** | Local hash/IP/domain/URL matching; optional `--online` feed |
-| **Timeline** | Super-timeline merge with filter |
-| **Reports** | HTML, DOCX, PDF with custody, findings, IOCs, MITRE ATT&CK |
+## 🔒 Offline-First Guarantee
 
-## Documentation
+AllinOneForensics operates 100% offline by default. No external telemetry or telemetry egress unless explicitly requested via `--online`. Fully compatible with air-gapped secure labs.
 
-Comprehensive forensic reference documentation lives in [`docs/`](docs/):
+---
 
-| Doc | Topic |
-|-----|-------|
-| [01](docs/01-computer-forensics-fundamentals.md) | Computer Forensics Fundamentals, Order of Volatility, Live vs Dead |
-| [02](docs/02-windows-forensics.md) | Windows Forensics: MFT, Registry, Event Logs, Prefetch, LNK, JumpLists |
-| [03](docs/03-memory-forensics.md) | Memory Forensics: acquisition, Volatility 3, injection/credential analysis |
-| [04](docs/04-network-forensics.md) | Network Forensics: PCAP, DNS, JA3, beaconing, flow analysis |
-| [05](docs/05-mobile-forensics.md) | Mobile Forensics: Android/iOS artifacts and acquisition |
-| [06](docs/06-cloud-forensics.md) | Cloud Forensics: AWS/Azure/GCP audit log analysis |
-| [07](docs/07-email-forensics.md) | Email Forensics: headers, SPF/DKIM/DMARC, PST/OST analysis |
-| [08](docs/08-malware-forensics.md) | Malware Forensics: static/dynamic analysis, YARA, IOC extraction |
-| [09](docs/09-timeline-analysis.md) | Timeline Analysis: super-timelines, cross-artifact correlation |
-| [10](docs/10-forensic-tools.md) | Forensic Tools reference catalog and selection guide |
-| [11](docs/11-dfir-workflow.md) | Complete DFIR Investigation Workflow (NIST SP 800-86) |
-| [12](docs/12-case-studies.md) | Realistic Forensic Case Studies (ransomware, insider, APT, cloud, mobile) |
-| [13](docs/13-interview-questions.md) | Forensic Interview & Scenario-Based Questions |
-| [14](docs/14-quick-reference-tables.md) | Quick-Reference Tables for lookup during investigations |
+## 📄 License & Compliance
 
-## Offline-First
-
-Every module works with zero network. Online enrichment is **disabled** unless you pass `--online`. Isolated machines supported.
-
-## Roadmap (v1.x)
-
-- Autopsy-style disk carving depth
-- Full AXIOM artifact catalog
-- Volatility3 default bundle
-- Windows credential-artifact module (LSASS/SAM/DPAPI, analyst-confirmed)
-
-## License
-
-Apache-2.0. For authorized DFIR only.
-
-## Contributing
-
-See `CONTRIBUTING.md` for setup and testing.
+Licensed under the **Apache-2.0 License**. Authorized DFIR, security research, and educational use only.
