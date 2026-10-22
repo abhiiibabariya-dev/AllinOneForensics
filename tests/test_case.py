@@ -42,7 +42,9 @@ def test_evidence_ingest_and_hash(tmp_path: Path) -> None:
 def test_parsers_run_on_samples(tmp_path: Path) -> None:
     _set_cases_dir(tmp_path)
     case = Case.create(name="IR-003", examiner="Abhi")
-    samples = Path("/storage/emulated/0/projects/AllinOneForensics/samples")
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    (samples / "bash_history").write_text("ls -la\n", encoding="utf-8")
     ingest_to_case(case, str(samples), analyst="Abhi")
     parsed = run_parsers(case.path / "evidence")
     assert "modules" in parsed
@@ -63,6 +65,7 @@ def test_timeline_from_case(tmp_path: Path) -> None:
 
 
 def test_ioc_file_load() -> None:
-    data = load_iocs(Path("/storage/emulated/0/projects/AllinOneForensics/aiof/intel/iocs.json"))
+    iocs_path = Path(__file__).parent.parent / "aiof" / "intel" / "iocs.json"
+    data = load_iocs(iocs_path)
     assert "sha256" in data
     assert "ip" in data
