@@ -11,6 +11,7 @@ PARSER_NAMES = (
     "network",
     "cloud",
     "memory",
+    "container",
 )
 
 
@@ -43,6 +44,10 @@ def _load(name: str) -> Callable[[Path], Any]:
         from aiof.parsers.memory import MemoryParser
 
         return MemoryParser
+    if name == "container":
+        from aiof.parsers.container import ContainerParser
+
+        return ContainerParser
     raise KeyError(name)
 
 
