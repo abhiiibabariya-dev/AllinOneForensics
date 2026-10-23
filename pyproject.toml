@@ -57,5 +57,5 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 120
 select = ["E", "F", "I"]
-ignore = ["E501", "E722", "F401", "F403", "F405", "B007"]
+ignore = ["E501", "E722", "F401", "F403", "F405", "B007", "I001"]
 

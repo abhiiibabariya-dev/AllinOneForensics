@@ -98,6 +98,39 @@ def _h(x: object) -> str:
     return html_lib.escape(str(x) if x is not None else "", quote=True)
 
 
+def _load_case_full(case_id: str):
+    """Load a case and persisted artifacts for the web dashboard routes."""
+    case_obj = Case.load(case_id)
+    if case_obj is None:
+        return None, [], [], [], [], [], [], {}
+    case_data = {"case_id": case_obj.case_id, "name": case_obj.name,
+                 "examiner": case_obj.examiner, "created_at": case_obj.created_at,
+                 "status": case_obj.status}
+    evidence = [item.to_dict() for item in case_obj.evidence]
+    custody = list(case_obj.custody)
+    artifacts, reports, findings, iocs, parser_status = [], [], [], [], {}
+    for artifact_path in case_obj.list_artifacts():
+        try:
+            payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        artifacts.append({"name": artifact_path.stem, "data": payload})
+        if isinstance(payload, dict):
+            payload_findings = payload.get("findings", [])
+            if isinstance(payload_findings, list):
+                findings.extend(item for item in payload_findings if isinstance(item, dict))
+            payload_iocs = payload.get("iocs", [])
+            if isinstance(payload_iocs, list):
+                iocs.extend(payload_iocs)
+            parser_name = payload.get("parser", artifact_path.stem)
+            parser_status[str(parser_name)] = {
+                "status": "available",
+                "findings": len(payload_findings) if isinstance(payload_findings, list) else 0,
+            }
+    reports.extend({"name": path.name, "path": str(path)} for path in case_obj.list_reports())
+    return case_data, evidence, custody, artifacts, reports, findings, iocs, parser_status
+
+
 _CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -451,7 +484,6 @@ def case_detail(case_id: str):
     examiner = str(data.get("examiner", "—"))
     created_at = str(data.get("created_at", "—"))
     status = str(data.get("status", "open"))
-    case_path = str(Path(DEFAULT_CONFIG.cases_dir) / cid)
     badge_cls = "open" if status.lower() == "open" else ("archived" if status.lower() == "archived" else "closed")
 
     # Severity counts
