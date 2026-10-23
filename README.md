@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">🛡️ AllinOneForensics (AIOF) 🔬</h1>
-  <p align="center"><strong>Enterprise-Grade Digital Forensics, Incident Response (DFIR) & Threat Hunting Workbench</strong></p>
+  <p align="center"><strong>The Ultimate Enterprise-Grade Digital Forensics, Incident Response (DFIR) & Threat Hunting Workbench</strong></p>
   <p align="center">
     <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white" />
     <img src="https://img.shields.io/badge/Python-3.11%2B-informational?style=for-the-badge&logo=python&logoColor=yellow" />
@@ -12,100 +12,103 @@
 
 ---
 
-## ⚡ Executive Summary
+## 🧭 Executive Overview: What Is AIOF & Why Is It Needed?
 
-**AllinOneForensics (AIOF)** is a unified, high-performance forensic investigation suite designed for cybersecurity professionals, SOC analysts, and incident responders. Inspired by modern threat hunting platforms (such as DFIR-IRIS) and rigorous NIST SP 800-86 standards, AIOF bridges the gap between raw artifact parsing, cryptographic chain-of-custody preservation, Sigma threat detection, and automated report generation—running 100% offline in air-gapped secure labs.
+In modern cybersecurity incidents, investigators face massive data fragmentation across endpoints, containers, memory dumps, cloud environments, and mobile devices. Traditional toolsets require dozens of disparate standalone utilities, complicated database setups, and constant internet connectivity.
 
----
-
-## 📊 Comprehensive Capability Matrix
-
-| Forensic Domain | Supported Artifacts & Engines | Core Capabilities & Analysis Depth |
-| :--- | :--- | :--- |
-| **🪟 Windows Forensics** | EVTX, Registry Hives, Prefetch, Amcache, LNK, JumpLists, \$MFT, Defender | Timestamp normalization (FILETIME), IOC extraction, process execution tracking |
-| **🐧 Linux Forensics** | `/var/log/*`, auth.log, bash_history, cron, systemd, user accounts | Privilege escalation detection, SSH brute-force analysis, unauthorized cron persistence |
-| **🍎 macOS Forensics** | Unified Logs, LaunchAgents, LaunchDaemons, browser state | Persistence vector discovery, plist parsing, quarantine flag verification |
-| **📱 Mobile & Android** | ADB backups, package manifests, logcat dumps, SMS/Chrome DBs | App permission inspection, unencrypted SQLite artifact extraction |
-| **🌐 Network & PCAP** | `.pcap` dumps, DNS queries, HTTP headers, TLS-SNI streams | Beaconing frequency heuristics, C2 communication pattern matching |
-| **☁️ Cloud Auditing** | AWS CloudTrail, Azure Activity, GCP Audit JSON logs | Privileged API call tracking, unauthorized cross-region resource creation |
-| **🧠 Memory Forensics** | Volatility 3 dumps, raw memory images (`.raw`, `.dmp`, `.img`) | Process enumeration, network socket inspection, RWX memory injection detection |
-| **🐳 Container Security** | Kubernetes audit logs, Docker inspect JSON | Unauthenticated API access, dangerous RBAC bindings, privileged host mounts |
-| **📧 Email & Malware** | EML/MSG files, headers, static binaries, YARA rules | SPF/DKIM/DMARC validation, YARA signature matching, entropy checks |
+**AllinOneForensics (AIOF)** solves this by providing a **unified, standalone, air-gapped forensic workbench** inspired by platforms like *DFIR-IRIS* and built around strict **NIST SP 800-86** chain-of-custody standards. It consolidates evidence ingestion, cryptographic integrity verification, deep multi-platform artifact parsing, Sigma threat correlation, MITRE ATT&CK mapping, and automated reporting into a single lightning-fast CLI and Web UI workbench.
 
 ---
 
-## 🏗️ End-to-End Investigation Workflow
+## 🗺️ Master Architecture & Complete Investigation Lifecycle
 
 ```mermaid
 graph TD
-    subgraph 1. Acquisition & Preservation
-        A1[Raw Disk / RAM / Cloud Logs] --> A2[SHA-256 Hashing Engine]
-        A2 --> A3[Tamper-Evident Chain-of-Custody Manifest]
+    subgraph PHASE_1 [Phase 1: Acquisition & Chain of Custody]
+        E1[Raw Disk / Memory / Cloud Logs] -->|SHA-256 Hashing| E2[Integrity Verifier]
+        E2 -->|Tamper Proof| E3[Cryptographic Manifest JSON/CSV]
     end
 
-    subgraph 2. Multi-Platform Artifact Parsing
-        A3 --> B1[Windows Parser]
-        A3 --> B2[Linux Parser]
-        A3 --> B3[macOS Parser]
-        A3 --> B4[Cloud & Container Parser]
-        A3 --> B5[Memory & Network Parser]
+    subgraph PHASE_2 [Phase 2: Multi-Platform Modular Parsers]
+        E3 --> P1[Windows: EVTX, Reg, MFT]
+        E3 --> P2[Linux: Auth, Syslog, Cron]
+        E3 --> P3[macOS: Unified Logs, Plists]
+        E3 --> P4[Memory: Volatility 3, RWX]
+        E3 --> P5[Cloud & Container: AWS, K8s]
+        E3 --> P6[Mobile, Network & Malware]
     end
 
-    subgraph 3. Advanced Detection & Intelligence
-        B1 & B2 & B3 & B4 & B5 --> C1[IOC Regex Matcher]
-        B1 & B2 & B3 & B4 & B5 --> C2[Sigma Rule Correlation Engine]
-        B1 & B2 & B3 & B4 & B5 --> C3[STIX/TAXII Threat Intel Sync]
-        C1 & C2 & C3 --> C4[MITRE ATT&CK TTP Mapping]
+    subgraph PHASE_3 [Phase 3: Advanced Intelligence & Detection]
+        P1 & P2 & P3 & P4 & P5 & P6 --> D1[IOC Regex Matcher]
+        P1 & P2 & P3 & P4 & P5 & P6 --> D2[Sigma Rule Correlation]
+        P1 & P2 & P3 & P4 & P5 & P6 --> D3[STIX/TAXII Threat Sync]
+        D1 & D2 & D3 --> D4[MITRE ATT&CK TTP Mapping]
     end
 
-    subgraph 4. Reporting & Incident Management
-        C4 --> D1[Unified Chronological Super-Timeline]
-        D1 --> D2[Interactive FastHTML / FastAPI Web UI Dashboard]
-        D1 --> D3[Court-Ready HTML / DOCX / PDF Reports]
+    subgraph PHASE_4 [Phase 4: Chronology & Actionable Output]
+        D4 --> R1[Unified Super-Timeline Generation]
+        R1 --> R2[FastAPI / FastHTML Interactive Web UI Dashboard]
+        R1 --> R3[Court-Ready HTML / DOCX / PDF Reports]
     end
 ```
 
 ---
 
-## 💻 Installation & Environment Setup
+## 🛠️ Complete Advanced Tool Suite & Purpose Breakdown
+
+| Advanced Tool / Module | File Path Reference | What It Does | Where & Why It Is Needed | How You Can Use It |
+| :--- | :--- | :--- | :--- | :--- |
+| **Case & Evidence Manager** | `aiof/core/` | Manages secure case directories, examiners, and SHA-256 cryptographic hashes. | Needed at case inception to guarantee court-admissible chain of custody. | `aiof case create --name "IR-1"`<br>`aiof ingest --case "IR-1" --path image.raw` |
+| **Windows Artifact Parser** | `aiof/parsers/windows/` | Parses EVTX logs, Registry hives, Prefetch, Amcache, LNK, JumpLists, \$MFT, Defender. | Needed during endpoint compromise analysis to track executed programs and user activity. | `aiof parse --case "IR-1" --modules windows` |
+| **Linux Forensics Parser** | `aiof/parsers/linux/` | Extracts `/var/log/*`, auth logs, sudoers, bash history, cron jobs, and user accounts. | Needed for server intrusions to detect unauthorized SSH access and cron persistence. | `aiof parse --case "IR-1" --modules linux` |
+| **Memory Forensics Engine** | `aiof/parsers/memory/` | Analyzes raw memory dumps (`.raw`, `.dmp`, `.img`) for hidden processes, sockets, and RWX injections. | Needed when volatile malware or fileless rootkits are suspected in RAM. | `aiof parse --case "IR-1" --modules memory` |
+| **Sigma Detection Engine** | `aiof/analysis/sigma.py` | Correlates parsed events against high-fidelity threat detection rules (PowerShell, sudo abuse). | Needed to instantly flag known attacker behaviors without manual log scouring. | Automatic during `aiof parse` |
+| **MITRE ATT&CK Mapper** | `aiof/analysis/mitre.py` | Automatically tags findings with tactics and techniques (e.g., T1059.001). | Needed to categorize adversary capabilities for executive reporting. | Automatic during analysis |
+| **Super-Timeline Builder** | `aiof/analysis/timeline.py` | Normalizes and merges disparate timestamps into a unified chronological sequence. | Needed to reconstruct the precise timeline of an attack vector. | `aiof parse --case "IR-1" --all` |
+| **Multi-Format Reporting** | `aiof/reporting/` | Generates professional HTML, DOCX, and PDF forensic reports. | Needed to present findings to legal teams, management, and stakeholders. | `aiof report --case "IR-1" --format html,docx,pdf` |
+| **Interactive Web UI Dashboard** | `aiof/web/app.py` | Serves an Iris-grade FastAPI/FastHTML web dashboard (`http://127.0.0.1:8088`). | Needed for visual interactive threat hunting and case collaboration. | `aiof ui --case "IR-1"` |
+
+---
+
+## 📦 Installation & Environment Setup
 
 ```bash
-# Clone the repository
+# 1. Clone repository
 git clone https://github.com/abhiiibabariya-dev/AllinOneForensics.git
 cd AllinOneForensics
 
-# Install in editable mode with development & analysis dependencies
+# 2. Install package in editable mode with all optional forensic dependencies
 pip install -e .[dev,windows,memory,yara]
 ```
 
 ---
 
-## 🕹️ CLI & Operational Reference
+## 🕹️ Operational CLI Guide & Workflows
 
 ```bash
-# 1. Initialize a new forensic case
-aiof case create --name "IR-2026-091" --examiner "Senior Forensics Investigator"
+# Step 1: Create a secure forensic case workspace
+aiof case create --name "IR-2026-091" --examiner "Lead Forensics Analyst"
 
-# 2. Ingest evidence with automatic SHA-256 chain-of-custody verification
+# Step 2: Ingest forensic evidence (read-only preservation with SHA-256 verification)
 aiof ingest --case IR-2026-091 --path ./evidence/suspect_disk.raw
 aiof ingest --case IR-2026-091 --path ./evidence/k8s_audit.json
 
-# 3. Execute multi-platform parsers and intelligence correlation
+# Step 3: Run all advanced parsers and intelligence engines
 aiof parse --case IR-2026-091 --all
 
-# 4. Compile court-ready documentation (HTML, DOCX, PDF)
+# Step 4: Generate court-ready reports (HTML, DOCX, PDF)
 aiof report --case IR-2026-091 --format html,docx,pdf
 
-# 5. Launch the high-performance Web UI Dashboard
+# Step 5: Launch the interactive Web UI dashboard
 aiof ui --case IR-2026-091
-# Navigate to: http://127.0.0.1:8088
+# Access at: http://127.0.0.1:8088
 ```
 
 ---
 
-## 📺 Live Terminal & Web UI Walkthrough
+## 📺 Live Terminal Execution & Web UI Walkthrough
 
-### ⌨️ CLI Execution Trace
+### ⌨️ Terminal Execution Trace
 ```text
 $ aiof parse --case IR-2026-091 --all
 [+] Loading forensic case: IR-2026-091
@@ -117,7 +120,7 @@ $ aiof parse --case IR-2026-091 --all
 [✓] Analysis complete. Reports stored in: ./cases/IR-2026-091/reports/
 ```
 
-### 🖥️ Interactive Web UI Dashboard Preview
+### 🖥️ Web UI Dashboard Preview
 ```text
 +-----------------------------------------------------------------------------------------+
 | 🛡️ AllinOneForensics (AIOF) Workbench                  Active Case: IR-2026-091         |
@@ -137,13 +140,13 @@ $ aiof parse --case IR-2026-091 --all
 
 ---
 
-## 🔒 Security & Air-Gapped Compliance
+## 🔒 Offline-First Air-Gapped Security Guarantee
 
-- **100% Offline Execution:** Designed specifically for secure, air-gapped forensic workstations. Zero external telemetry egress by default.
-- **Cryptographic Verifiability:** Every evidentiary item is fingerprinted upon ingestion, ensuring uncompromised evidentiary chain-of-custody.
+- **Air-Gapped Operation:** Operates 100% offline with zero external telemetry, cloud dependency, or external egress.
+- **Evidentiary Integrity:** Cryptographic hashing prevents evidence tampering during the entire investigation lifecycle.
 
 ---
 
 ## 📄 License & Legal Notice
 
-Distributed under the **Apache-2.0 License**. Authorized Digital Forensics and Incident Response (DFIR), security research, and educational engagements only.
+Distributed under the **Apache-2.0 License**. Engineered exclusively for authorized Digital Forensics and Incident Response (DFIR), security research, penetration testing, and educational contexts.
