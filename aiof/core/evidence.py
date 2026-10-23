@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from aiof.core.case import Case
 
