@@ -93,6 +93,39 @@ aiof ui --case IR-2026-091
 
 ---
 
+## 📺 Visual Demo & UI Walkthrough
+
+### Terminal CLI Execution
+```text
+$ aiof parse --case IR-2026-091 --all
+[+] Loading forensic case: IR-2026-091
+[+] Verifying evidence integrity (SHA-256): 12 files intact (0 modified)
+[+] Running Windows, Linux, macOS, Network, and Cloud Artifact Parsers...
+[+] Sigma Rule Engine matched 3 high-severity indicators.
+[+] Super-timeline generated successfully (1,420 events).
+[✓] Analysis complete. Reports generated: ./cases/IR-2026-091/reports/
+```
+
+### Interactive Web UI Dashboard
+```text
+ +-----------------------------------------------------------------------+
+ | AllinOneForensics (AIOF) - Active Case: IR-2026-091                   |
+ +-----------------------------------------------------------------------+
+ | [Cases] [Evidence & Integrity] [Parsers] [Timeline] [IOCs] [Reports]  |
+ +-----------------------------------------------------------------------+
+ | 📊 Case Statistics & Evidence Integrity:                              |
+ |   - Total Evidence Items: 12   - SHA-256 Verified: 100% Intact        |
+ |   - High-Severity Findings: 3  - IOC Matches: 2                       |
+ |                                                                       |
+ | 🔍 Recent Suspicious Findings:                                        |
+ |   [High] Sigma/sigma-001: PowerShell Encoded Command Execution        |
+ |   [High] Windows/Defender/Threat: Trojan:Win32/Emotet detected         |
+ |   [Med]  Linux/Auth: Failed SSH login attempt from 192.168.1.50       |
+ +-----------------------------------------------------------------------+
+```
+
+---
+
 ## 🔒 Offline-First Guarantee
 
 AllinOneForensics operates 100% offline by default. No external telemetry or telemetry egress unless explicitly requested via `--online`. Fully compatible with air-gapped secure labs.
