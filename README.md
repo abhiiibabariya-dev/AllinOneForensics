@@ -1,94 +1,92 @@
-# AllinOneForensics (AIOF)
+# AllinOneForensics (AIOF) 🛡️🔬
+
+<div align="center">
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production--ready-green)]()
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)]()
+[![Offline First](https://img.shields.io/badge/offline--first-air--gapped%20ready-orange)]()
 
-**All-in-one authorized Digital Forensics and Incident Response (DFIR) workbench.** Engineered for comprehensive host, mobile, network, cloud, container, and memory analysis. Designed for offline-first operation on standalone forensic workstations with zero external dependency requirements.
+**The Ultimate All-in-One Digital Forensics & Incident Response (DFIR) & Threat Hunting Workbench.**
+*Engineered for high-speed host, mobile, network, cloud, container, and memory analysis with cryptographic chain-of-custody verification and Iris-grade incident management.*
+
+</div>
 
 ---
 
-## 🏗️ Architecture & Investigation Workflow
+## 🏗️ Architecture & NIST SP 800-86 Workflow
 
-AllinOneForensics follows the **NIST SP 800-86** incident response lifecycle and rigorous chain-of-custody standards:
+AllinOneForensics enforces rigid forensic standards matching the **NIST SP 800-86** incident response lifecycle:
 
-```
-[1. Acquisition & Ingestion] ---> (SHA-256 Hashing & Custody Log)
-              │
-              ▼
-[2. Multi-Platform Parsing] ----> (Windows, Linux, macOS, Cloud, Container, Memory, Network, Mobile)
-              │
-              ▼
-[3. Advanced Analysis Engine] --> (IOC Matching, STIX/TAXII Threat Intel, Sigma Rule Correlation, MITRE ATT&CK)
-              │
-              ▼
-[4. Unified Chronology] --------> (Super-timeline Generation & Keyword Filtering)
-              │
-              ▼
-[5. Actionable Output] ---------> (Interactive Web UI, HTML / DOCX / PDF Reports, CSV Manifests)
+```mermaid
+graph TD
+    A[1. Acquisition & Ingestion] -->|SHA-256 Hashing & Custody Log| B[2. Multi-Platform Artifact Parsers]
+    B -->|Windows, Linux, macOS, Cloud, Container, Memory| C[3. Advanced Analysis Engine]
+    C -->|IOC Matching, Sigma Rules, STIX/TAXII, MITRE ATT&CK| D[4. Unified Super-Timeline]
+    D -->|Chronological Correlation & Filtering| E[5. Actionable Output & Reporting]
+    E -->|Interactive Web UI, HTML / DOCX / PDF Reports| F[6. IRIS-Grade Case Management]
 ```
 
 ---
 
-## 🚀 Key Features & Modules
+## 🚀 Key Features & Enterprise Capabilities
 
-### 1. Evidence Ingestion & Chain of Custody
-- **Cryptographic Integrity:** Computes SHA-256 hashes for all ingested files/directories.
-- **Integrity Verification:** Continuous verification (`verify_evidence_integrity`) detecting missing or modified evidence.
-- **Manifest Export:** Export tamper-evident manifests in JSON and CSV formats.
+### 1. Cryptographic Chain of Custody & Evidence Integrity
+- **SHA-256 Hashing:** Automatic computation and secure logging for every ingested asset.
+- **Continuous Integrity Audits:** Detects unauthorized post-acquisition modifications (`verify_evidence_integrity`).
+- **Tamper-Evident Manifests:** Export cryptographic JSON & CSV manifests for court-ready proceedings.
 
-### 2. Multi-Platform Artifact Parsers
-- **Windows:** EVTX event logs, Registry hives, Prefetch, Amcache, LNK files, JumpLists, and browser history.
-- **Linux:** `/var/log` analysis, auth logs, bash history, cron jobs, systemd services, and user accounts.
-- **macOS:** Unified log heuristics, LaunchAgents, LaunchDaemons, and browser artifacts.
-- **Android & Mobile:** ADB backup extraction, package list inspection, logcat dumps, and unencrypted Chrome/SMS.
-- **Network & PCAP:** Ingestion of `.pcap` files, DNS/HTTP/SNI extraction, and beaconing frequency heuristics.
-- **Cloud Auditing:** JSON log analysis for AWS CloudTrail, Azure Activity, and GCP Audit logs.
-- **Memory Forensics:** Volatility 3 integration with robust string/hash fallbacks.
-- **Container Security:** Kubernetes audit log analysis (unauthenticated access, dangerous RBAC bindings) and Docker inspect JSON analysis (privileged containers, host volume binds).
-- **Email & Malware:** EML/MSG header analysis, SPF/DKIM/DMARC checks, static malware analysis, and YARA rule signature matching.
+### 2. Deep Multi-Platform Artifact Parsers
+- **Windows Forensics:** EVTX Event Logs, Registry Hives, Prefetch, Amcache, LNK Files, JumpLists, \$MFT, and Defender telemetry.
+- **Linux Forensics:** `/var/log` analysis, auth logs, bash history, cron jobs, systemd services, and user privilege auditing.
+- **macOS Forensics:** Unified logs heuristics, LaunchAgents, LaunchDaemons, and application state databases.
+- **Android & Mobile:** ADB backup extraction, package inspection, logcat dumps, and unencrypted SMS/Chrome databases.
+- **Network & PCAP:** Packet capture ingestion, DNS/HTTP/TLS-SNI extraction, and beaconing frequency analytics.
+- **Cloud Auditing:** AWS CloudTrail, Azure Activity, and GCP Audit JSON log correlation.
+- **Memory Forensics:** Volatility 3 integration with robust offline string extraction and injection heuristics.
+- **Container Security:** Kubernetes audit inspection (unauthenticated access, dangerous RBAC bindings) and Docker inspect privilege analysis.
+- **Email & Malware:** EML/MSG header analysis, SPF/DKIM/DMARC checks, and YARA rule signature matching.
 
-### 3. Advanced Threat Intelligence & Detection
-- **STIX/TAXII Threat Intel Sync:** Automated parsing and integration of STIX 2.x bundles (`aiof/intel/stix_sync.py`).
-- **Sigma Rule Matching Engine:** High-fidelity event pattern matching against custom or built-in Sigma rules (`aiof/analysis/sigma.py`).
-- **MITRE ATT&CK Mapping:** Automatic association of findings to ATT&CK tactics and techniques.
+### 3. Threat Intelligence & Detection Engineering
+- **STIX/TAXII Sync:** Automated ingestion and mapping of STIX 2.x threat intelligence bundles.
+- **Sigma Rule Engine:** High-performance event pattern matching against built-in and custom Sigma rules (`aiof/analysis/sigma.py`).
+- **MITRE ATT&CK Mapping:** Automatic correlation of findings to adversary tactics, techniques, and procedures (TTPs).
 
 ---
 
-## 📦 Installation
+## 📦 Installation & Quick Setup
 
 ```bash
-pip install allinoneforensics
-```
-
-Or clone and install in editable mode:
-```bash
+# Clone the repository
 git clone https://github.com/abhiiibabariya-dev/AllinOneForensics.git
 cd AllinOneForensics
+
+# Install in editable mode with all dependencies
 pip install -e .
 ```
 
 ---
 
-## 🕹️ Quick Start Guide
+## 🕹️ CLI Quick Start Guide
 
 ```bash
-# 1. Create a new forensic case
-aiof case create --name "IR-2026-091" --examiner "Analyst Name"
+# 1. Create a secure forensic case
+aiof case create --name "IR-2026-091" --examiner "Lead Analyst"
 
-# 2. Ingest evidence (read-only preservation)
+# 2. Ingest forensic evidence (read-only preservation)
 aiof ingest --case IR-2026-091 --path ./evidence/disk_image.raw
 aiof ingest --case IR-2026-091 --path ./evidence/k8s_audit.json
 
-# 3. Run multi-platform parsers and analysis
+# 3. Execute multi-platform parsers and detection engines
 aiof parse --case IR-2026-091 --all
 
-# 4. Generate court-ready reports (HTML, DOCX, PDF)
+# 4. Generate court-ready reports in multiple formats
 aiof report --case IR-2026-091 --format html,docx,pdf
 
-# 5. Launch interactive Web UI dashboard
+# 5. Launch the interactive Web UI Dashboard
 aiof ui --case IR-2026-091
-# Access at: http://127.0.0.1:8088
+# Accessible locally at: http://127.0.0.1:8088
 ```
 
 ---
@@ -100,7 +98,7 @@ aiof ui --case IR-2026-091
 $ aiof parse --case IR-2026-091 --all
 [+] Loading forensic case: IR-2026-091
 [+] Verifying evidence integrity (SHA-256): 12 files intact (0 modified)
-[+] Running Windows, Linux, macOS, Network, and Cloud Artifact Parsers...
+[+] Running Windows, Linux, macOS, Network, Cloud, and Memory Parsers...
 [+] Sigma Rule Engine matched 3 high-severity indicators.
 [+] Super-timeline generated successfully (1,420 events).
 [✓] Analysis complete. Reports generated: ./cases/IR-2026-091/reports/
@@ -126,12 +124,12 @@ $ aiof parse --case IR-2026-091 --all
 
 ---
 
-## 🔒 Offline-First Guarantee
+## 🔒 Offline-First Air-Gapped Guarantee
 
-AllinOneForensics operates 100% offline by default. No external telemetry or telemetry egress unless explicitly requested via `--online`. Fully compatible with air-gapped secure labs.
+AllinOneForensics is architected for **100% air-gapped forensic laboratories**. No external telemetry, phone-home behavior, or cloud egress occurs unless explicitly authorized via `--online`.
 
 ---
 
 ## 📄 License & Compliance
 
-Licensed under the **Apache-2.0 License**. Authorized DFIR, security research, and educational use only.
+Distributed under the **Apache-2.0 License**. Developed for authorized Digital Forensics, Incident Response, security research, and educational engagements only.
