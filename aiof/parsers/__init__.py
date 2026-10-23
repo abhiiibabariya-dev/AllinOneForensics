@@ -12,6 +12,7 @@ PARSER_NAMES = (
     "cloud",
     "memory",
     "container",
+    "malware",
 )
 
 
@@ -48,6 +49,16 @@ def _load(name: str) -> Callable[[Path], Any]:
         from aiof.parsers.container import ContainerParser
 
         return ContainerParser
+    if name == "malware":
+        from aiof.parsers.malware.malware import parse_malware_artifacts
+
+        class MalwareParserAdapter:
+            def __init__(self, evidence_dir: Path):
+                self.evidence_dir = evidence_dir
+            def parse_all(self) -> dict[str, Any]:
+                return parse_malware_artifacts(self.evidence_dir)
+
+        return MalwareParserAdapter
     raise KeyError(name)
 
 
