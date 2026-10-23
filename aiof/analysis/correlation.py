@@ -51,3 +51,41 @@ def correlate_cross_source(parsed: dict[str, Any]) -> List[Dict[str, Any]]:
             })
 
     return correlations
+
+
+def generate_triage_summary(parsed: dict[str, Any]) -> Dict[str, Any]:
+    """Generates an automated heuristic triage summary with weighted risk scoring."""
+    findings = parsed.get("findings", [])
+    if isinstance(findings, dict):
+        findings = findings.get("findings", [])
+
+    severity_weights = {"Critical": 10, "High": 7, "Medium": 4, "Low": 1, "Info": 0}
+    total_score = 0
+    breakdown = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Info": 0}
+
+    for f in findings:
+        sev = f.get("severity", "Low")
+        if sev not in breakdown:
+            sev = "Low"
+        breakdown[sev] += 1
+        total_score += severity_weights.get(sev, 1)
+
+    risk_level = "Low"
+    if total_score >= 30 or breakdown["Critical"] > 0:
+        risk_level = "Critical"
+    elif total_score >= 15 or breakdown["High"] > 0:
+        risk_level = "High"
+    elif total_score >= 5 or breakdown["Medium"] > 0:
+        risk_level = "Medium"
+
+    correlations = correlate_cross_source(parsed)
+
+    return {
+        "risk_level": risk_level,
+        "risk_score": total_score,
+        "severity_breakdown": breakdown,
+        "total_findings": len(findings),
+        "cross_source_correlations": len(correlations),
+        "correlations": correlations,
+        "recommendation": f"Triage completed with risk level '{risk_level}' (Score: {total_score}). Review {breakdown['Critical']} critical and {breakdown['High']} high severity findings."
+    }
