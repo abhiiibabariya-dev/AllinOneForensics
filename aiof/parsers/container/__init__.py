@@ -64,7 +64,7 @@ class ContainerParser:
                             findings.append({
                                 "severity": "High",
                                 "category": "Container/K8s",
-                                "description": f"Sensitive Pod Exec/Attach activity detected",
+                                "description": "Sensitive Pod Exec/Attach activity detected",
                                 "detail": f"User: {user}, URI: {uri}"
                             })
                 except Exception:
