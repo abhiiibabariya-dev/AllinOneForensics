@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,12,25,36,54&height=200&section=header&text=AllinOneForensics%20(AIOF)&fontSize=40&fontColor=fff&fontAlignY=38&desc=Unified%20DFIR,%20Incident%20Response%20&%20Threat%20Hunting%20Workbench&descSize=16&descAlignY=62" />
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,12,25,36,54&height=200&section=header&text=AllinOneForensics%20(AIOF)%20-%20Ultra%20Advanced&fontSize=34&fontColor=fff&fontAlignY=38&desc=Next-Gen%20Autonomous%20DFIR,%20Cloud%20Forensics%20&%20MITRE%20Heatmap%20Workbench&descSize=15&descAlignY=62" />
 </p>
 
 <p align="center">
