@@ -7,9 +7,12 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
 
 from aiof.analysis.ioc import match_iocs
 from aiof.analysis.timeline import build_timeline
+from aiof.analysis.correlation import generate_triage_summary
+from aiof.analysis.mitre import generate_mitre_heatmap
 from aiof.core.case import Case
 from aiof.core.config import DEFAULT_CONFIG
 from aiof.core.evidence import compute_hash_sha256, find_evidence, ingest_to_case
@@ -157,6 +160,30 @@ def hunt(
         table.add_row(item["type"], item["value"], item["location"])
     console.print(table)
     console.print(f"[green]{result['match_count']} match(es)[/green]")
+
+
+@app.command()
+def triage(
+    case_id: str = typer.Argument(..., help="Case ID to triage"),
+) -> None:
+    """Run automated heuristic triage with risk scoring and MITRE ATT&CK mapping."""
+    case = _load_case(case_id)
+    blob = _artifact_blob(case)
+    findings = (blob.get("findings") or {}).get("findings") if isinstance(blob.get("findings"), dict) else blob.get("findings") or []
+    parsed = {"modules": blob.get("modules") or {}, "findings": findings}
+    summary = generate_triage_summary(parsed)
+    heatmap = generate_mitre_heatmap(findings)
+    console.print(Panel(f"[bold]Risk Level:[/bold] {summary['risk_level']} (Score: {summary['risk_score']})"))
+    console.print(f"[green]Total Findings:[/green] {summary['total_findings']}")
+    console.print(f"[green]Cross-Source Correlations:[/green] {summary['cross_source_correlations']}")
+    table = Table(title="Tactic Heatmap")
+    table.add_column("Tactic")
+    table.add_column("Findings")
+    for tactic, count in heatmap["tactics_heatmap"].items():
+        table.add_row(tactic, str(count))
+    console.print(table)
+    for technique, count in heatmap["technique_counts"].items():
+        console.print(f"[cyan]MITRE {technique}:[/cyan] {count}")
 
 
 @app.command()
