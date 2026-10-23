@@ -31,10 +31,6 @@ class ContainerParser:
                         except Exception:
                             continue
 
-<<<<<<< HEAD
-=======
-                        # Check Kubernetes audit event structure
->>>>>>> b9ef8aa (Fix test sample path using tmp_path and add container parser for CI)
                         verb = event.get("verb", "")
                         uri = event.get("requestURI", "")
                         user = event.get("user", {}).get("username", "")
@@ -50,10 +46,6 @@ class ContainerParser:
                             "time": event.get("stageTimestamp") or event.get("requestReceivedTimestamp")
                         })
 
-<<<<<<< HEAD
-=======
-                        # Heuristics for high risk K8s actions
->>>>>>> b9ef8aa (Fix test sample path using tmp_path and add container parser for CI)
                         if user in {"system:unauthenticated", "anonymous"}:
                             findings.append({
                                 "severity": "Critical",
