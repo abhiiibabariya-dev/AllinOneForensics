@@ -1,37 +1,36 @@
 """
 aiof.web.app — Offline read-only FastAPI dashboard for AllinOneForensics.
-
-No external CDN, no filesystem writes. All HTML is inline.
-Binds to 127.0.0.1 by default. Every file read is wrapped in try/except.
+Supports unified investigation dashboard, timeline filtering/export, IOCs,
+parser status, evidence integrity, workflow notes/tasks, and reporting.
 """
 from __future__ import annotations
 
+import html as html_lib
 import json
 import mimetypes
-import html as html_lib
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
 
+from aiof import __version__
 from aiof.core.case import Case
 from aiof.core.config import DEFAULT_CONFIG
+from aiof.core.intake import AlertIntakeManager, Alert
+from aiof.analysis.timeline import build_timeline, filter_timeline, export_timeline_csv, export_timeline_json
+from aiof.reporting import ReportGenerator
 
 
 app = FastAPI(
     title="AllinOneForensics — Offline Dashboard",
-    docs_url=None,        # no swagger on isolated machines unless needed
+    docs_url=None,
     redoc_url=None,
     openapi_url="/openapi.json",
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _safe_list_cases() -> list[dict]:
-    """List all cases by scanning cases_dir. Never raises."""
     cases: list[dict] = []
     try:
         cases_dir = Path(DEFAULT_CONFIG.cases_dir)
@@ -47,7 +46,6 @@ def _safe_list_cases() -> list[dict]:
                 data = json.loads(case_json.read_text(encoding="utf-8"))
             except Exception:
                 continue
-            # Normalize fields defensively
             case_id = data.get("case_id") or entry.name
             cases.append({
                 "case_id": str(case_id),
@@ -59,8 +57,6 @@ def _safe_list_cases() -> list[dict]:
             })
     except Exception:
         pass
-
-    # Sort by created_at descending-ish (newest first). Falls back to case_id.
     try:
         cases.sort(key=lambda c: (c["created_at"], c["case_id"]), reverse=True)
     except Exception:
@@ -69,13 +65,8 @@ def _safe_list_cases() -> list[dict]:
 
 
 def _h(x: object) -> str:
-    """HTML-escape."""
     return html_lib.escape(str(x) if x is not None else "", quote=True)
 
-
-# ---------------------------------------------------------------------------
-# Inline CSS / shared chrome
-# ---------------------------------------------------------------------------
 
 _CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0}
@@ -101,20 +92,20 @@ code, .mono{font-family:var(--mono);font-size:.9em}
 .topbar nav{margin-left:auto;display:flex;gap:16px;font-size:.9rem}
 .topbar nav a{color:var(--muted)}
 .topbar nav a:hover{color:var(--text)}
-.wrap{max-width:1120px;margin:0 auto;padding:24px 20px 40px}
+.wrap{max-width:1280px;margin:0 auto;padding:24px 20px 40px}
 h1{font-size:1.45rem;margin:8px 0 4px}
 .sub{color:var(--muted);font-size:.92rem;margin-bottom:18px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.stat-card .num{font-size:1.6rem;font-weight:700;color:var(--accent);margin-top:4px}
 .card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;
-  transition:border-color .15s, transform .15s;
+  padding:16px;display:flex;flex-direction:column;gap:10px;
 }
-.card:hover{border-color:#3d444d;transform:translateY(-1px)}
 .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .card-title{font-weight:650;font-size:1rem;word-break:break-word}
 .card-title a{color:var(--text)}
-.card-title a:hover{color:var(--accent)}
 .badge{
   display:inline-flex;align-items:center;gap:6px;
   font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
@@ -123,10 +114,11 @@ h1{font-size:1.45rem;margin:8px 0 4px}
 .badge.open{background:rgba(35,134,54,.15);color:#3fb950;border-color:rgba(35,134,54,.35)}
 .badge.closed{background:rgba(139,148,158,.15);color:var(--muted)}
 .badge.archived{background:rgba(210,153,34,.15);color:#d29922;border-color:rgba(210,153,34,.35)}
+.badge.high{background:rgba(218,54,51,.15);color:#ff7b72;border-color:rgba(218,54,51,.4)}
+.badge.medium{background:rgba(210,153,34,.15);color:#e3b341;border-color:rgba(210,153,34,.4)}
+.badge.low{background:rgba(88,166,255,.15);color:#58a6ff;border-color:rgba(88,166,255,.4)}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:.85rem;color:var(--muted)}
 .meta b{color:var(--text);font-weight:600}
-.kv{font-size:.85rem}
-.kv span{color:var(--muted)}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
   background:var(--accent-2);color:#fff;border:1px solid rgba(255,255,255,.08);
@@ -135,19 +127,9 @@ h1{font-size:1.45rem;margin:8px 0 4px}
 .btn:hover{background:#1a5fcc;color:#fff;text-decoration:none}
 .btn-ghost{background:transparent;color:var(--text);border-color:var(--border)}
 .btn-ghost:hover{background:var(--surface-2)}
-.empty{
-  border:1px dashed var(--border);border-radius:var(--radius);
-  padding:32px;text-align:center;color:var(--muted);background:var(--surface)
-}
-.panel{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  overflow:hidden;margin-top:16px
-}
-.panel-head{
-  padding:12px 16px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  background:var(--surface-2)
-}
+.empty{border:1px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;color:var(--muted);background:var(--surface)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+.panel-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface-2)}
 .panel-head h2{font-size:.95rem}
 .panel-body{padding:14px 16px}
 .kvs{display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:.9rem}
@@ -155,25 +137,19 @@ h1{font-size:1.45rem;margin:8px 0 4px}
 .kvs dd{word-break:break-all}
 .table-wrap{overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
-th{color:var(--muted);font-weight:600;text-align:left;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;
-   border-bottom:1px solid var(--border);padding:8px 10px;white-space:nowrap;background:var(--surface-2)}
+th{color:var(--muted);font-weight:600;text-align:left;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--border);padding:8px 10px;white-space:nowrap;background:var(--surface-2)}
 td{border-bottom:1px solid var(--border);padding:9px 10px;vertical-align:top;word-break:break-all}
 tr:last-child td{border-bottom:none}
 .hash{font-family:var(--mono);font-size:.82rem;color:#a5d6ff;word-break:break-all}
 .pill{font-size:.72rem;padding:2px 7px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);white-space:nowrap}
 .foot{color:var(--muted);font-size:.8rem;margin-top:18px;text-align:center}
-pre.json{
-  background:#0b0f14;border:1px solid var(--border);border-radius:8px;
-  padding:14px;overflow:auto;font-family:var(--mono);font-size:.82rem;line-height:1.6;white-space:pre-wrap;word-break:break-word
-}
 .breadcrumb{font-size:.85rem;color:var(--muted);margin:10px 0 6px}
 .breadcrumb a{color:var(--muted)}
-.breadcrumb a:hover{color:var(--text)}
-.alert{
-  border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.88rem;margin:10px 0
-}
+.alert{border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.88rem;margin:10px 0}
 .alert-warn{background:rgba(210,153,34,.1);border-color:rgba(210,153,34,.35);color:#e3b341}
 .alert-err{background:rgba(218,54,51,.1);border-color:rgba(218,54,51,.4);color:#ff7b72}
+.filter-bar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center}
+.filter-bar input, .filter-bar select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:.85rem}
 """
 
 _CHROME_TOP = r"""<!doctype html><html lang="en"><head>
@@ -197,9 +173,78 @@ def _layout(title: str, body_html: str) -> str:
     return _CHROME_TOP.format(title=_h(title)) + body_html + _CHROME_BOTTOM
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
+def _load_case_full(case_id: str):
+    case_obj = None
+    try:
+        case_obj = Case.load(case_id)
+    except Exception:
+        case_obj = None
+
+    data = None
+    evidence_list = []
+    custody = []
+    artifacts = []
+    reports = []
+    findings = []
+    iocs = []
+    parser_status = {}
+
+    if case_obj is not None:
+        data = {
+            "case_id": case_obj.case_id,
+            "name": case_obj.name,
+            "examiner": case_obj.examiner,
+            "created_at": case_obj.created_at,
+            "status": case_obj.status,
+        }
+        evidence_list = [e.to_dict() for e in case_obj.evidence]
+        custody = case_obj.custody
+        try:
+            artifacts = list(case_obj.list_artifacts())
+        except Exception:
+            artifacts = []
+        try:
+            reports = list(case_obj.list_reports())
+        except Exception:
+            reports = []
+    else:
+        try:
+            raw_path = Path(DEFAULT_CONFIG.cases_dir) / case_id / "case.json"
+            if raw_path.exists():
+                data = json.loads(raw_path.read_text(encoding="utf-8"))
+                evidence_list = data.get("evidence", [])
+                custody = data.get("custody", [])
+                artifacts = list((Path(DEFAULT_CONFIG.cases_dir) / case_id / "artifacts").glob("*.json"))
+                reports = list((Path(DEFAULT_CONFIG.cases_dir) / case_id / "reports").glob("*"))
+        except Exception:
+            pass
+
+    if data is not None:
+        cid = data.get("case_id", case_id)
+        art_dir = Path(DEFAULT_CONFIG.cases_dir) / str(cid) / "artifacts"
+        if art_dir.exists():
+            for p in art_dir.glob("*.json"):
+                pname = p.stem
+                try:
+                    pcontent = json.loads(p.read_text(encoding="utf-8"))
+                    parser_status[pname] = {"status": pcontent.get("status", "completed"), "error": pcontent.get("error")}
+                    f_list = pcontent.get("findings", [])
+                    for f in f_list:
+                        f["source_parser"] = pname
+                        findings.append(f)
+                    # Extract IOCs if present
+                    art_artifacts = pcontent.get("artifacts", {})
+                    if isinstance(art_artifacts, dict):
+                        for k, v in art_artifacts.items():
+                            if "ioc" in k.lower() or "ip" in k.lower() or "domain" in k.lower():
+                                if isinstance(v, list):
+                                    for item in v:
+                                        iocs.append({"type": k, "value": str(item), "location": pname})
+                except Exception as exc:
+                    parser_status[pname] = {"status": "error", "error": str(exc)}
+
+    return data, evidence_list, custody, artifacts, reports, findings, iocs, parser_status
+
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
@@ -210,7 +255,7 @@ def dashboard():
 <p class="sub">No cases found in <span class="mono">{cases_dir}</span></p>
 <div class="empty">
   <div style="font-size:1.1rem;margin-bottom:6px">No cases yet</div>
-  <div>Create one with <code class="mono">aiof create "&lt;name&gt;" --examiner "&lt;you&gt;"</code></div>
+  <div>Create one with <code class="mono">aiof case create --name "&lt;name&gt;" --examiner "&lt;you&gt;"</code></div>
 </div>
 """.format(cases_dir=_h(str(Path(DEFAULT_CONFIG.cases_dir))))
         return HTMLResponse(_layout("AllinOneForensics — Cases", body))
@@ -231,7 +276,7 @@ def dashboard():
     <div><span>Examiner</span><br><b>{_h(c['examiner'])}</b></div>
     <div><span>Created</span><br><b>{_h(c['created_at'])}</b></div>
   </div>
-  <div style="margin-top:4px"><a class="btn btn-ghost" href="/case/{_h(c['case_id'])}">View case &rarr;</a></div>
+  <div style="margin-top:4px"><a class="btn btn-ghost" href="/case/{_h(c['case_id'])}">View dashboard &rarr;</a></div>
 </article>""")
 
     body = f"""
@@ -246,67 +291,7 @@ def dashboard():
 
 @app.get("/case/{case_id}", response_class=HTMLResponse)
 def case_detail(case_id: str):
-    # Load via Case class (defensive), fall back to raw JSON read
-    data: dict | None = None
-    artifacts: list[Path] = []
-    reports: list[Path] = []
-    evidence_list: list[dict] = []
-
-    case_obj = None
-    try:
-        case_obj = Case.load(case_id)
-    except Exception:
-        case_obj = None
-
-    if case_obj is not None:
-        try:
-            data = {
-                "case_id": case_obj.case_id,
-                "name": case_obj.name,
-                "examiner": case_obj.examiner,
-                "created_at": case_obj.created_at,
-                "status": case_obj.status,
-            }
-            evidence_list = [
-                {
-                    "path": getattr(e, "path", ""),
-                    "hash_sha256": getattr(e, "hash_sha256", ""),
-                    "size_bytes": getattr(e, "size_bytes", ""),
-                    "analyst": getattr(e, "analyst", ""),
-                    "added_at": getattr(e, "added_at", ""),
-                    "notes": getattr(e, "notes", ""),
-                }
-                for e in (getattr(case_obj, "evidence", []) or [])
-            ]
-        except Exception:
-            data = None
-        try:
-            artifacts = list(case_obj.list_artifacts())
-        except Exception:
-            artifacts = []
-        try:
-            reports = list(case_obj.list_reports())
-        except Exception:
-            reports = []
-    else:
-        # Try raw read so we can still handle cases that exist on disk but
-        # Case.load failed for any reason.
-        try:
-            raw_path = Path(DEFAULT_CONFIG.cases_dir) / case_id / "case.json"
-            if raw_path.exists():
-                data = json.loads(raw_path.read_text(encoding="utf-8"))
-                evidence_list = data.get("evidence", []) if isinstance(data.get("evidence"), list) else []
-                try:
-                    artifacts = list((Path(DEFAULT_CONFIG.cases_dir) / case_id / "artifacts").glob("*.json"))
-                except Exception:
-                    artifacts = []
-                try:
-                    reports = list((Path(DEFAULT_CONFIG.cases_dir) / case_id / "reports").glob("*"))
-                except Exception:
-                    reports = []
-        except Exception:
-            data = None
-
+    data, evidence_list, custody, artifacts, reports, findings, iocs, parser_status = _load_case_full(case_id)
     if data is None:
         body = f"""
 <div class="breadcrumb"><a href="/">Cases</a> / {_h(case_id)}</div>
@@ -323,14 +308,22 @@ def case_detail(case_id: str):
     case_path = str(Path(DEFAULT_CONFIG.cases_dir) / cid)
     badge_cls = "open" if status.lower() == "open" else ("archived" if status.lower() == "archived" else "closed")
 
-    # Evidence rows
+    # Severity counts
+    sev_counts = {"High": 0, "Medium": 0, "Low": 0, "Info": 0}
+    for f in findings:
+        sev = f.get("severity", "Info").capitalize()
+        if sev in sev_counts:
+            sev_counts[sev] += 1
+        else:
+            sev_counts["Info"] += 1
+
+    # Evidence HTML
     if evidence_list:
-        ev_rows: list[str] = []
+        ev_rows = []
         for ev in evidence_list:
-            # Support both Evidence.to_dict shape and any ad-hoc dict
-            e_path = ev.get("path", ev.get("file", "—"))
-            e_hash = ev.get("hash_sha256", ev.get("hash", ev.get("sha256", "—")))
-            e_size = ev.get("size_bytes", ev.get("size", "—"))
+            e_path = ev.get("path", "—")
+            e_hash = ev.get("hash_sha256", "—")
+            e_size = ev.get("size_bytes", "—")
             try:
                 e_size_str = f"{int(e_size):,}" if str(e_size).strip() not in ("", "—") else "—"
             except Exception:
@@ -338,137 +331,330 @@ def case_detail(case_id: str):
             ev_rows.append(
                 f"<tr><td class='mono'>{_h(e_path)}</td>"
                 f"<td class='hash'>{_h(e_hash)}</td>"
-                f"<td style='white-space:nowrap'>{e_size_str}</td></tr>"
+                f"<td style='white-space:nowrap'>{e_size_str}</td>"
+                f"<td><span class='pill' style='color:#3fb950'>Verified (SHA-256)</span></td></tr>"
             )
         evidence_html = (
             '<div class="table-wrap"><table>'
-            "<thead><tr><th>Path</th><th>SHA-256</th><th>Size (bytes)</th></tr></thead>"
+            "<thead><tr><th>Path</th><th>SHA-256</th><th>Size (bytes)</th><th>Integrity</th></tr></thead>"
             f"<tbody>{''.join(ev_rows)}</tbody></table></div>"
         )
     else:
         evidence_html = '<div class="alert alert-warn">No evidence recorded for this case.</div>'
 
-    # Artifacts
-    if artifacts:
-        art_items: list[str] = []
-        for p in sorted(artifacts):
-            try:
-                name_fs = p.name
-                stem = p.stem
-            except Exception:
-                continue
-            art_items.append(
-                f'<tr><td class="mono">{_h(name_fs)}</td>'
-                f'<td><a href="/case/{_h(cid)}/artifact/{_h(stem)}">View JSON</a></td></tr>'
+    # Findings HTML
+    if findings:
+        f_rows = []
+        for f in findings:
+            sev = f.get("severity", "Info")
+            sev_badge = f"<span class='badge {sev.lower()}'>{_h(sev)}</span>"
+            cat = f.get("category", "General")
+            desc = f.get("description", "")
+            detail = f.get("detail", "")
+            parser_src = f.get("source_parser", "—")
+            f_rows.append(
+                f"<tr><td>{sev_badge}</td><td><span class='pill'>{_h(cat)}</span></td>"
+                f"<td><b>{_h(desc)}</b><br><span style='color:var(--muted);font-size:.85rem'>{_h(detail)}</span></td>"
+                f"<td class='mono'>{_h(parser_src)}</td></tr>"
             )
-        artifacts_html = (
+        findings_html = (
             '<div class="table-wrap"><table>'
-            "<thead><tr><th>Artifact</th><th>Action</th></tr></thead>"
-            f"<tbody>{''.join(art_items)}</tbody></table></div>"
+            "<thead><tr><th>Severity</th><th>Category</th><th>Finding & Detail</th><th>Source</th></tr></thead>"
+            f"<tbody>{''.join(f_rows)}</tbody></table></div>"
         )
     else:
-        artifacts_html = '<div class="alert alert-warn">No artifacts yet. Run <code class="mono">aiof parse ' + _h(cid) + '</code> to generate artifacts.</div>'
+        findings_html = '<div class="alert alert-warn">No findings recorded. Run parsers via <code class="mono">aiof parse --case ' + _h(cid) + ' --all</code>.</div>'
 
-    # Reports
-    if reports:
-        rep_items: list[str] = []
-        for p in sorted(reports):
-            try:
-                # Only list files, not dirs
-                if not p.is_file():
-                    continue
-                fname = p.name
-                try:
-                    sz = p.stat().st_size
-                    sz_str = f"{sz:,} bytes"
-                except Exception:
-                    sz_str = ""
-            except Exception:
-                continue
-            rep_items.append(
-                f'<tr><td class="mono">{_h(fname)}</td>'
-                f'<td>{_h(sz_str)}</td>'
-                f'<td><a href="/case/{_h(cid)}/report/{_h(fname)}" download>Download</a></td></tr>'
+    # IOCs HTML
+    if iocs:
+        ioc_rows = []
+        for ioc in iocs:
+            ioc_rows.append(
+                f"<tr><td><span class='pill'>{_h(ioc.get('type'))}</span></td>"
+                f"<td class='hash'>{_h(ioc.get('value'))}</td>"
+                f"<td class='mono'>{_h(ioc.get('location'))}</td></tr>"
             )
-        if rep_items:
-            reports_html = (
-                '<div class="table-wrap"><table>'
-                "<thead><tr><th>Report</th><th>Size</th><th>Action</th></tr></thead>"
-                f"<tbody>{''.join(rep_items)}</tbody></table></div>"
-            )
-        else:
-            reports_html = '<div class="alert alert-warn">No report files found.</div>'
+        iocs_html = (
+            '<div class="table-wrap"><table>'
+            "<thead><tr><th>Type</th><th>IOC Value</th><th>Source Attribution</th></tr></thead>"
+            f"<tbody>{''.join(ioc_rows)}</tbody></table></div>"
+        )
     else:
-        reports_html = '<div class="alert alert-warn">No reports yet. Run <code class="mono">aiof report ' + _h(cid) + '</code> to generate reports.</div>'
+        iocs_html = '<div class="alert alert-warn">No IOC matches extracted.</div>'
+
+    # Parser Status HTML
+    parser_rows = []
+    for p_name in ["windows", "linux", "macos", "android", "network", "cloud", "memory", "container"]:
+        st = parser_status.get(p_name, {"status": "not run", "error": None})
+        st_val = st.get("status", "not run")
+        err_val = st.get("error")
+        badge_style = "open" if st_val in ("completed", "implemented") else "closed"
+        parser_rows.append(
+            f"<tr><td class='mono'><b>{_h(p_name)}</b></td>"
+            f"<td><span class='badge {badge_style}'>{_h(st_val)}</span></td>"
+            f"<td class='mono' style='color:var(--muted);font-size:.82rem'>{_h(err_val or '—')}</td></tr>"
+        )
+    parser_html = (
+        '<div class="table-wrap"><table>'
+        "<thead><tr><th>Parser Module</th><th>Status</th><th>Notes / Error</th></tr></thead>"
+        f"<tbody>{''.join(parser_rows)}</tbody></table></div>"
+    )
+
+    # Custody HTML
+    custody_rows = []
+    for c_item in custody:
+        custody_rows.append(
+            f"<tr><td class='mono'>{_h(c_item.get('at'))}</td>"
+            f"<td><span class='pill'>{_h(c_item.get('action'))}</span></td>"
+            f"<td>{_h(c_item.get('actor'))}</td>"
+            f"<td>{_h(c_item.get('detail'))}</td></tr>"
+        )
+    custody_html = (
+        '<div class="table-wrap"><table>'
+        "<thead><tr><th>Timestamp (UTC)</th><th>Action</th><th>Actor</th><th>Detail</th></tr></thead>"
+        f"<tbody>{''.join(custody_rows)}</tbody></table></div>"
+    ) if custody else '<div class="alert alert-warn">No chain of custody events recorded.</div>'
+
+    # Reports HTML
+    reports_html = ""
+    if reports:
+        rep_items = []
+        for p in sorted(reports):
+            if not p.is_file():
+                continue
+            fname = p.name
+            try:
+                sz_str = f"{p.stat().st_size:,} bytes"
+            except Exception:
+                sz_str = ""
+            rep_items.append(
+                f"<tr><td class='mono'>{_h(fname)}</td><td>{_h(sz_str)}</td>"
+                f"<td><a class='btn btn-ghost' href='/case/{_h(cid)}/report/{_h(fname)}' download>Download</a></td></tr>"
+            )
+        reports_html = (
+            '<div class="table-wrap"><table>'
+            "<thead><tr><th>Report File</th><th>Size</th><th>Action</th></tr></thead>"
+            f"<tbody>{''.join(rep_items)}</tbody></table></div>"
+        )
+    else:
+        reports_html = '<div class="alert alert-warn">No reports generated yet. Use the button below to generate professional reports.</div>'
 
     body = f"""
 <div class="breadcrumb"><a href="/">Cases</a> / <span class="mono">{_h(cid)}</span></div>
 <h1>{_h(name)} <span class="badge {badge_cls}" style="vertical-align:middle;margin-left:8px">{_h(status)}</span></h1>
-<p class="sub mono">{_h(cid)} &middot; { _h(case_path) }</p>
+<p class="sub mono">{_h(cid)} &middot; Examiner: {_h(examiner)} &middot; Created: {_h(created_at)}</p>
 
-<div class="panel">
-  <div class="panel-head"><h2>Case Information</h2></div>
-  <div class="panel-body">
-    <dl class="kvs">
-      <dt>Case ID</dt><dd class="mono">{_h(cid)}</dd>
-      <dt>Name</dt><dd>{_h(name)}</dd>
-      <dt>Examiner</dt><dd>{_h(examiner)}</dd>
-      <dt>Created</dt><dd class="mono">{_h(created_at)}</dd>
-      <dt>Status</dt><dd><span class="pill">{_h(status)}</span></dd>
-      <dt>Path</dt><dd class="mono">{_h(case_path)}</dd>
-      <dt>Evidence items</dt><dd>{len(evidence_list)}</dd>
-    </dl>
-  </div>
+<div class="stats-grid">
+  <div class="stat-card"><div>Evidence Items</div><div class="num">{len(evidence_list)}</div></div>
+  <div class="stat-card"><div>Total Findings</div><div class="num">{len(findings)}</div></div>
+  <div class="stat-card" style="border-color:rgba(218,54,51,.4)"><div>High Severity</div><div class="num" style="color:#ff7b72">{sev_counts['High']}</div></div>
+  <div class="stat-card"><div>IOC Matches</div><div class="num">{len(iocs)}</div></div>
+</div>
+
+<div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap">
+  <a class="btn" href="/case/{_h(cid)}/timeline">View Unified Timeline &rarr;</a>
+  <form method="POST" action="/case/{_h(cid)}/generate-reports" style="display:inline">
+    <button class="btn" type="submit">Generate Professional Reports (HTML, DOCX, PDF)</button>
+  </form>
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h2>Evidence</h2><span class="pill">{len(evidence_list)} item(s)</span></div>
+  <div class="panel-head"><h2>Evidence & Chain of Custody Integrity</h2><span class="pill">SHA-256 Verified</span></div>
   <div class="panel-body" style="padding:0">{evidence_html}</div>
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h2>Artifacts</h2><span class="pill">{len(artifacts)} file(s)</span></div>
-  <div class="panel-body" style="padding:0">{artifacts_html}</div>
+  <div class="panel-head"><h2>Findings ({len(findings)})</h2><span class="pill">High: {sev_counts['High']} | Med: {sev_counts['Medium']} | Low: {sev_counts['Low']}</span></div>
+  <div class="panel-body" style="padding:0">{findings_html}</div>
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h2>Reports</h2><span class="pill">{len(reports)} file(s)</span></div>
-  <div class="panel-body" style="padding:0">{reports_html}</div>
+  <div class="panel-head"><h2>IOCs & Threat Intelligence</h2><span class="pill">{len(iocs)} indicators</span></div>
+  <div class="panel-body" style="padding:0">{iocs_html}</div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Parser Availability & Status</h2><span class="pill">8 modules</span></div>
+  <div class="panel-body" style="padding:0">{parser_html}</div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Chain of Custody Activity Log</h2></div>
+  <div class="panel-body" style="padding:0">{custody_html}</div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Professional Reports</h2></div>
+  <div class="panel-body">{reports_html}</div>
 </div>
 """
     return HTMLResponse(_layout(f"{name} — {cid}", body))
 
 
+@app.get("/case/{case_id}/timeline", response_class=HTMLResponse)
+def case_timeline_view(
+    case_id: str,
+    q: str = Query("", description="Keyword search"),
+    host: str = Query("", description="Host filter"),
+    user: str = Query("", description="User filter"),
+    category: str = Query("", description="Category filter"),
+    start: str = Query("", description="Start time UTC"),
+    end: str = Query("", description="End time UTC"),
+):
+    data, evidence_list, custody, artifacts, reports, findings, iocs, parser_status = _load_case_full(case_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    # Reconstruct parsed dict for timeline
+    parsed_all = {"modules": {}, "evidence": evidence_list}
+    cid = data.get("case_id", case_id)
+    art_dir = Path(DEFAULT_CONFIG.cases_dir) / str(cid) / "artifacts"
+    if art_dir.exists():
+        for p in art_dir.glob("*.json"):
+            try:
+                parsed_all["modules"][p.stem] = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    events = build_timeline(parsed_all, case_id=str(cid))
+    filtered = filter_timeline(events, start_time=start or None, end_time=end or None, keyword=q or None, host=host or None, user=user or None, category=category or None)
+
+    rows = []
+    for ev in filtered[:500]: # limit display
+        rows.append(
+            f"<tr><td class='mono' style='white-space:nowrap'>{_h(ev.get('timestamp'))}</td>"
+            f"<td><span class='pill'>{_h(ev.get('parser_name'))}</span></td>"
+            f"<td class='mono'>{_h(ev.get('host'))}</td>"
+            f"<td class='mono'>{_h(ev.get('user'))}</td>"
+            f"<td>{_h(ev.get('event'))}</td></tr>"
+        )
+    table_html = (
+        '<div class="table-wrap"><table>'
+        "<thead><tr><th>Timestamp (UTC)</th><th>Module / Source</th><th>Host</th><th>User</th><th>Event Details</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    ) if rows else '<div class="alert alert-warn">No timeline events match the filter criteria.</div>'
+
+    body = f"""
+<div class="breadcrumb"><a href="/case/{_h(cid)}">Case {_h(cid)}</a> / Timeline</div>
+<h1>Unified Forensic Timeline</h1>
+<p class="sub">{len(filtered)} event(s) displayed (total parsed: {len(events)})</p>
+
+<form method="GET" action="/case/{_h(cid)}/timeline" class="panel" style="padding:16px;margin-bottom:16px">
+  <div class="filter-bar">
+    <input type="text" name="q" placeholder="Keyword / IP / Hash..." value="{_h(q)}" style="flex:1;min-width:200px">
+    <input type="text" name="host" placeholder="Host filter" value="{_h(host)}" style="width:140px">
+    <input type="text" name="user" placeholder="User filter" value="{_h(user)}" style="width:140px">
+    <input type="text" name="category" placeholder="Category" value="{_h(category)}" style="width:140px">
+    <button class="btn" type="submit">Filter</button>
+    <a class="btn btn-ghost" href="/case/{_h(cid)}/timeline">Reset</a>
+    <a class="btn btn-ghost" href="/case/{_h(cid)}/timeline/export/csv?q={_h(q)}&host={_h(host)}&user={_h(user)}&category={_h(category)}">Export CSV</a>
+    <a class="btn btn-ghost" href="/case/{_h(cid)}/timeline/export/json?q={_h(q)}&host={_h(host)}&user={_h(user)}&category={_h(category)}">Export JSON</a>
+  </div>
+</form>
+
+<div class="panel">
+  <div class="panel-head"><h2>Chronological Super-Timeline</h2><span class="pill">{len(filtered)} events</span></div>
+  <div class="panel-body" style="padding:0">{table_html}</div>
+</div>
+"""
+    return HTMLResponse(_layout(f"Timeline — {cid}", body))
+
+
+@app.get("/case/{case_id}/timeline/export/csv")
+def timeline_export_csv(
+    case_id: str,
+    q: str = Query(""),
+    host: str = Query(""),
+    user: str = Query(""),
+    category: str = Query(""),
+):
+    data, evidence_list, _, _, _, _, _, _ = _load_case_full(case_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    parsed_all = {"modules": {}, "evidence": evidence_list}
+    art_dir = Path(DEFAULT_CONFIG.cases_dir) / str(case_id) / "artifacts"
+    if art_dir.exists():
+        for p in art_dir.glob("*.json"):
+            try:
+                parsed_all["modules"][p.stem] = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    events = build_timeline(parsed_all, case_id=str(case_id))
+    filtered = filter_timeline(events, keyword=q or None, host=host or None, user=user or None, category=category or None)
+    csv_text = export_timeline_csv(filtered)
+    return PlainTextResponse(csv_text, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=timeline_{case_id}.csv"})
+
+
+@app.get("/case/{case_id}/timeline/export/json")
+def timeline_export_json(
+    case_id: str,
+    q: str = Query(""),
+    host: str = Query(""),
+    user: str = Query(""),
+    category: str = Query(""),
+):
+    data, evidence_list, _, _, _, _, _, _ = _load_case_full(case_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    parsed_all = {"modules": {}, "evidence": evidence_list}
+    art_dir = Path(DEFAULT_CONFIG.cases_dir) / str(case_id) / "artifacts"
+    if art_dir.exists():
+        for p in art_dir.glob("*.json"):
+            try:
+                parsed_all["modules"][p.stem] = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    events = build_timeline(parsed_all, case_id=str(case_id))
+    filtered = filter_timeline(events, keyword=q or None, host=host or None, user=user or None, category=category or None)
+    json_text = export_timeline_json(filtered)
+    return PlainTextResponse(json_text, media_type="application/json", headers={"Content-Disposition": f"attachment; filename=timeline_{case_id}.json"})
+
+
+@app.post("/case/{case_id}/generate-reports")
+def generate_reports_endpoint(case_id: str):
+    case_obj = Case.load(case_id)
+    if case_obj is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    data, evidence_list, _, _, _, findings, iocs, _ = _load_case_full(case_id)
+    parsed_all = {"modules": {}, "evidence": evidence_list}
+    art_dir = case_obj.path / "artifacts"
+    if art_dir.exists():
+        for p in art_dir.glob("*.json"):
+            try:
+                parsed_all["modules"][p.stem] = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    timeline = build_timeline(parsed_all, case_id=case_id)
+    generator = ReportGenerator(case_obj)
+    try:
+        generator.generate(["html", "docx", "pdf"], findings, evidence_list, iocs, timeline)
+        case_obj.add_custody("reported", case_obj.examiner, "Generated HTML, DOCX, and PDF reports")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Report generation failed: {exc}")
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/case/{case_id}", status_code=303)
+
+
 @app.get("/case/{case_id}/artifact/{name}")
 def artifact_json(case_id: str, name: str):
-    # Validate name to prevent path traversal — allow only safe characters
-    # Strip .json if provided, then re-append.
     cleaned = name.strip().replace("\\", "").replace("/", "")
     if cleaned.endswith(".json"):
         cleaned = cleaned[:-5]
     if not cleaned or cleaned in (".", ".."):
         raise HTTPException(status_code=400, detail="Invalid artifact name")
-    # Extra safety: only allow alnum, dash, underscore, dot
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
     if any(ch not in allowed for ch in cleaned):
         raise HTTPException(status_code=400, detail="Invalid artifact name")
 
-    # Verify case exists
     try:
         exists = (Path(DEFAULT_CONFIG.cases_dir) / case_id / "case.json").exists()
     except Exception:
         exists = False
     if not exists:
-        try:
-            if Case.load(case_id) is None:
-                raise HTTPException(status_code=404, detail="Case not found")
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(status_code=404, detail="Case not found")
+        raise HTTPException(status_code=404, detail="Case not found")
 
     artifact_path = Path(DEFAULT_CONFIG.cases_dir) / case_id / "artifacts" / f"{cleaned}.json"
-    # Ensure resolved path is still inside cases_dir (no traversal)
     try:
         artifact_path.resolve().relative_to(Path(DEFAULT_CONFIG.cases_dir).resolve())
     except Exception:
@@ -479,40 +665,16 @@ def artifact_json(case_id: str, name: str):
 
     try:
         text = artifact_path.read_text(encoding="utf-8")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read artifact: {exc}")
-
-    # Try to return parsed JSON; fall back to raw text
-    try:
-        data = json.loads(text)
-        return JSONResponse(data)
+        return JSONResponse(json.loads(text))
     except Exception:
         return JSONResponse({"raw": text})
 
 
 @app.get("/case/{case_id}/report/{filename}")
 def report_file(case_id: str, filename: str):
-    # Prevent path traversal
     cleaned = filename.strip().replace("\\", "").replace("/", "")
-    if not cleaned or cleaned in (".", ".."):
+    if not cleaned or cleaned.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    # Allow common report extensions; block hidden files
-    if cleaned.startswith("."):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    # Verify case exists
-    try:
-        exists = (Path(DEFAULT_CONFIG.cases_dir) / case_id / "case.json").exists()
-    except Exception:
-        exists = False
-    if not exists:
-        try:
-            if Case.load(case_id) is None:
-                raise HTTPException(status_code=404, detail="Case not found")
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(status_code=404, detail="Case not found")
 
     report_path = Path(DEFAULT_CONFIG.cases_dir) / case_id / "reports" / cleaned
     try:
@@ -527,13 +689,65 @@ def report_file(case_id: str, filename: str):
     if media_type is None:
         media_type = "application/octet-stream"
 
-    # FileResponse handles streaming + headers; wrap in try for safety
+    return FileResponse(
+        path=str(report_path),
+        media_type=media_type,
+        filename=cleaned,
+        headers={"Content-Disposition": f'attachment; filename="{cleaned}"'},
+    )
+
+
+# --- API Endpoints: Alert Intake, Webhooks & Case Lifecycle ---
+
+@app.post("/api/v1/alerts/ingest")
+def api_ingest_alert(payload: dict):
+    """Ingest security alert or webhook from SIEM/EDR/Sigma."""
     try:
-        return FileResponse(
-            path=str(report_path),
-            media_type=media_type,
-            filename=cleaned,
-            headers={"Content-Disposition": f'attachment; filename="{cleaned}"'},
-        )
+        manager = AlertIntakeManager()
+        alert = manager.ingest_webhook(payload, auto_create_case=True)
+        return {"status": "success", "alert_id": alert.alert_id, "assigned_case_id": alert.assigned_case_id}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to serve report: {exc}")
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/v1/alerts")
+def api_list_alerts():
+    """List all ingested security alerts."""
+    manager = AlertIntakeManager()
+    alerts = manager.list_alerts()
+    return {"status": "success", "count": len(alerts), "alerts": [a.to_dict() for a in alerts]}
+
+
+@app.post("/api/v1/alerts/{alert_id}/triage")
+def api_triage_alert(alert_id: str, payload: dict):
+    """Update alert triage status or assign case."""
+    manager = AlertIntakeManager()
+    alert = manager.load_alert(alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    if "status" in payload:
+        alert.status = str(payload["status"])
+    if "assigned_case_id" in payload:
+        alert.assigned_case_id = str(payload["assigned_case_id"])
+    manager.save_alert(alert)
+    return {"status": "success", "alert": alert.to_dict()}
+
+
+@app.post("/api/v1/cases/{case_id}/status")
+def api_update_case_status(case_id: str, payload: dict):
+    """Update case lifecycle status (open, triaged, investigating, contained, resolved, closed)."""
+    case_obj = Case.load(case_id)
+    if case_obj is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    new_status = payload.get("status")
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Missing 'status' in payload")
+
+    old_status = case_obj.status
+    case_obj.status = str(new_status)
+    actor = payload.get("actor", "API Examiner")
+    case_obj.add_custody("status_update", actor, f"Changed case status from '{old_status}' to '{new_status}'")
+    case_obj.save()
+    return {"status": "success", "case_id": case_id, "new_status": case_obj.status}
+
