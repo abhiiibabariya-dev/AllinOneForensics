@@ -73,7 +73,6 @@ def match_sigma_rules(parsed_data: dict[str, Any], rules_dir: Path | None = None
             matched = True
             for field, expected_values in selection.items():
                 field_base = field.replace("__contains", "")
-                is_contains = "__contains" in field
 
                 event_val = str(event.get(field_base, "")).lower()
                 if not event_val:

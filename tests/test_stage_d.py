@@ -17,7 +17,7 @@ def test_cross_source_correlation(tmp_path: Path) -> None:
     DEFAULT_CONFIG.cases_dir = cases_dir
     DEFAULT_CONFIG.ensure_dirs()
 
-    case = Case.create(name="IR-CORR", examiner="Analyst")
+    Case.create(name="IR-CORR", examiner="Analyst")
     parsed = {
         "modules": {
             "memory": {
