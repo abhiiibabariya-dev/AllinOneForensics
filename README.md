@@ -65,6 +65,8 @@ aiof ui
 - **Multi-Platform Parsers (`aiof/parsers/`):** Extracts logs, registry hives, and volatile structures across Windows, Linux, memory, and cloud outputs.
 - **Threat Intelligence & Sigma (`aiof/analysis/`):** Matches IoCs and correlates behavior against Sigma detection rules and MITRE ATT&CK TTPs.
 - **Compliance Center (`aiof/core/compliance.py`):** Generates automated assurance packages mapped to NIST CSF 2.0 and ISO 27001 controls.
+- **Automated YARA Malware Scanning (`aiof/parsers/malware/malware.py`):** Scans file and memory dumps using compiled YARA rules for instant threat identification.
+- **MITRE ATT&CK Heatmap & Triage (`aiof/analysis/mitre.py` & `aiof/analysis/correlation.py`):** Maps findings to tactics/techniques and computes automated heuristic risk scoring.
 
 ---
 
