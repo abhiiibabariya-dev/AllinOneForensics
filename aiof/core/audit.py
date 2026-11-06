@@ -15,9 +15,12 @@ def _utc_now() -> str:
 
 
 class AuditLogger:
-    def __init__(self, log_path: Optional[Path] = None, secret_key: bytes = b"aiof-enterprise-audit-secret"):
+    def __init__(self, log_path: Optional[Path] = None, secret_key: Optional[bytes] = None):
         self.log_path = log_path or (Path(DEFAULT_CONFIG.cases_dir).parent / "audit_trail.jsonl")
-        self.secret_key = secret_key
+        configured_secret = secret_key or DEFAULT_CONFIG.audit_secret.encode("utf-8")
+        if not configured_secret and DEFAULT_CONFIG.environment == "production" and not DEFAULT_CONFIG.demo_only:
+            raise RuntimeError("AIOF_AUDIT_SECRET is required in production mode")
+        self.secret_key = configured_secret or b"local-development-audit-secret"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _get_last_entry(self) -> Optional[Dict[str, Any]]:

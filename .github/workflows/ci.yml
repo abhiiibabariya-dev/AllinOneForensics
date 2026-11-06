@@ -57,3 +57,42 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  environment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime and test dependencies
+        run: pip install -e ".[dev]"
+      - name: Validate environment matrix
+        run: python scripts/smoke-env.py
+      - name: Validate Render YAML
+        run: python -c "import yaml; yaml.safe_load(open('render.yaml'))"
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container
+        run: docker build --tag aiof-ci:test .
+      - name: Start synthetic demo container
+        run: |
+          docker run --detach --name aiof-demo-ci \
+            --publish 127.0.0.1:8088:8088 \
+            --env AIOF_ENV=demo \
+            --env AIOF_DEMO_ONLY=true \
+            --env AIOF_REQUIRE_AUTH=false \
+            --env AIOF_AUDIT_SECRET=ci-demo-secret \
+            aiof-ci:test
+      - name: Wait for health and verify demo
+        run: |
+          for attempt in {1..20}; do curl --fail http://127.0.0.1:8088/healthz && break || sleep 2; done
+          curl --fail http://127.0.0.1:8088/demo | grep -q "Synthetic data only"
+          curl --fail http://127.0.0.1:8088/api/v1/demo | grep -q "synthetic-read-only"
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs aiof-demo-ci

@@ -3,11 +3,40 @@ services:
     name: allinoneforensics-demo
     runtime: python
     plan: free
-    buildCommand: pip install .
+    buildCommand: python -m pip install --upgrade pip && pip install .
     startCommand: uvicorn aiof.web.app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:
+      - key: AIOF_ENV
+        value: "demo"
       - key: AIOF_DEMO_ONLY
         value: "true"
+      - key: AIOF_REQUIRE_AUTH
+        value: "false"
+      - key: AIOF_MAX_REQUEST_BYTES
+        value: "1048576"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+
+  - type: web
+    name: allinoneforensics-production
+    runtime: python
+    plan: starter
+    buildCommand: python -m pip install --upgrade pip && pip install .
+    startCommand: uvicorn aiof.web.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: AIOF_ENV
+        value: "production"
+      - key: AIOF_DEMO_ONLY
+        value: "false"
+      - key: AIOF_REQUIRE_AUTH
+        value: "true"
+      - key: AIOF_API_TOKEN
+        generateValue: true
+      - key: AIOF_MAX_REQUEST_BYTES
+        value: "1048576"
+      - key: AIOF_ALLOWED_ORIGINS
+        sync: false
       - key: PYTHON_VERSION
         value: "3.12.0"

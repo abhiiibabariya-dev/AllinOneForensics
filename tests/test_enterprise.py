@@ -10,6 +10,17 @@ from aiof.core.plugins import PluginManifest, PluginTrustManager
 from aiof.core.compliance import ComplianceExporter
 
 
+def test_audit_logger_requires_secret_outside_demo(monkeypatch):
+    from aiof.core.config import DEFAULT_CONFIG
+
+    monkeypatch.setattr(DEFAULT_CONFIG, "environment", "production")
+    monkeypatch.setattr(DEFAULT_CONFIG, "demo_only", False)
+    monkeypatch.setattr(DEFAULT_CONFIG, "audit_secret", "")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with pytest.raises(RuntimeError):
+            AuditLogger(log_path=Path(tmpdir) / "audit_trail.jsonl")
+
+
 def test_audit_logger_chain():
     with tempfile.TemporaryDirectory() as tmpdir:
         log_path = Path(tmpdir) / "audit_trail.jsonl"

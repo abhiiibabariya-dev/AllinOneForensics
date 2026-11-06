@@ -8,11 +8,15 @@ from __future__ import annotations
 import html as html_lib
 import json
 import mimetypes
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from aiof import __version__
 from aiof.core.case import Case
@@ -30,6 +34,43 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url="/openapi.json",
+)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        public_paths = {"/healthz", "/demo", "/api/v1/demo"}
+        if DEFAULT_CONFIG.demo_only and request.url.path not in public_paths:
+            return PlainTextResponse("Demo-only service", status_code=404)
+        if DEFAULT_CONFIG.require_auth and request.url.path not in public_paths:
+            supplied = request.headers.get("authorization", "")
+            expected = f"Bearer {DEFAULT_CONFIG.api_token}"
+            if not DEFAULT_CONFIG.api_token or not secrets.compare_digest(supplied, expected):
+                return PlainTextResponse("Authentication required", status_code=401, headers={"WWW-Authenticate": "Bearer"})
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                request_size = int(content_length)
+            except ValueError:
+                return PlainTextResponse("Invalid Content-Length", status_code=400)
+            if request_size > DEFAULT_CONFIG.max_request_bytes:
+                return PlainTextResponse("Request too large", status_code=413)
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(DEFAULT_CONFIG.allowed_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 
@@ -287,12 +328,12 @@ _CHROME_BOTTOM = r"""
 
 
 def _layout(title: str, body_html: str) -> str:
-    return _CHROME_TOP.format(title=_h(title)) + body_html + _CHROME_BOTTOM
+    return _CHROME_TOP.replace("{title}", _h(title)) + body_html + _CHROME_BOTTOM
 
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok", "service": "allinoneforensics", "demo": True}
+    return {"status": "ok", "service": "allinoneforensics", "demo": DEFAULT_CONFIG.demo_only}
 
 
 @app.get("/demo", response_class=HTMLResponse)

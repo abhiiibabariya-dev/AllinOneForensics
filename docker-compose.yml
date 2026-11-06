@@ -1,0 +1,52 @@
+services:
+  aiof-demo:
+    profiles: [demo]
+    build: .
+    environment:
+      AIOF_ENV: demo
+      AIOF_DEMO_ONLY: "true"
+      AIOF_REQUIRE_AUTH: "false"
+      AIOF_CASES_DIR: /var/lib/aiof/demo-cases
+      AIOF_AUDIT_SECRET: demo-only-secret
+      AIOF_MAX_REQUEST_BYTES: ${AIOF_MAX_REQUEST_BYTES:-1048576}
+    ports:
+      - "127.0.0.1:${AIOF_DEMO_PORT:-8088}:8088"
+    volumes:
+      - aiof-demo-cases:/var/lib/aiof/demo-cases
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8088/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aiof-production:
+    profiles: [production]
+    build: .
+    environment:
+      AIOF_ENV: production
+      AIOF_DEMO_ONLY: "false"
+      AIOF_REQUIRE_AUTH: "true"
+      AIOF_API_TOKEN: ${AIOF_API_TOKEN:?Set AIOF_API_TOKEN in .env}
+      AIOF_AUDIT_SECRET: ${AIOF_AUDIT_SECRET:?Set AIOF_AUDIT_SECRET in .env}
+      AIOF_CASES_DIR: /var/lib/aiof/cases
+      AIOF_ALLOWED_ORIGINS: ${AIOF_ALLOWED_ORIGINS:-}
+      AIOF_MAX_REQUEST_BYTES: ${AIOF_MAX_REQUEST_BYTES:-1048576}
+    ports:
+      - "127.0.0.1:${AIOF_PRODUCTION_PORT:-8089}:8088"
+    volumes:
+      - aiof-production-cases:/var/lib/aiof/cases
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8088/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  aiof-demo-cases:
+  aiof-production-cases:

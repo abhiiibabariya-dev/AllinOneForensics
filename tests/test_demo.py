@@ -9,7 +9,9 @@ client = TestClient(app)
 def test_health_endpoint() -> None:
     response = client.get("/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "allinoneforensics", "demo": True}
+    assert response.json() == {"status": "ok", "service": "allinoneforensics", "demo": False}
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
 
 
 def test_demo_is_synthetic_and_read_only() -> None:

@@ -4,6 +4,8 @@ cases/
 tests/.pytest_cache/
 .pytest_cache/
 .DS_Store
+.env
+*.bak
 *.pyc
 *.egg-info/
 *.egg-info
