@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: allinoneforensics-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn aiof.web.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: AIOF_DEMO_ONLY
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.12.0"

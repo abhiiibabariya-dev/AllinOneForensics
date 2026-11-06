@@ -20,6 +20,7 @@
 ## 🧭 Navigation
 
 - [Quick Start](#-quick-start)
+- [Guided Demo & Tutorial](#-guided-demo--tutorial)
 - [Core Features](#-core-features)
 - [Architecture & Workflow](#-architecture--workflow)
 - [Documentation Hub](#-documentation-hub)
@@ -54,6 +55,16 @@ aiof report Incident-2026-001 --format html,docx,pdf
 aiof ui
 # Access locally at http://127.0.0.1:8088
 ```
+
+## Guided Demo & Tutorial
+
+- **Local guided demo:** Start `aiof ui`, then open `http://127.0.0.1:8088/demo`.
+- **Beginner lesson:** Read [docs/DEMO.md](docs/DEMO.md) for installation, preservation, parsing, correlation, and reporting.
+- **Static landing page:** The `demo/` directory is published by the GitHub Pages workflow.
+- **Live sample deployment:** `render.yaml` defines a synthetic-only FastAPI deployment with `/demo` and `/healthz`.
+- **Audio overview:** Select **Listen to overview** on the demo page; narration is generated locally by the browser and never uploaded.
+
+The demo is synthetic and read-only. It does not access local cases, accept uploads, or expose evidence.
 
 ---
 

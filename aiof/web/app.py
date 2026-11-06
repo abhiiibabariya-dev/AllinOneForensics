@@ -22,6 +22,7 @@ from aiof.core.audit import AuditLogger
 from aiof.core.compliance import ComplianceExporter
 from aiof.analysis.timeline import build_timeline, filter_timeline, export_timeline_csv, export_timeline_json
 from aiof.reporting import ReportGenerator
+from aiof.web.demo import demo_payload, render_demo
 
 
 app = FastAPI(
@@ -287,6 +288,21 @@ _CHROME_BOTTOM = r"""
 
 def _layout(title: str, body_html: str) -> str:
     return _CHROME_TOP.format(title=_h(title)) + body_html + _CHROME_BOTTOM
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok", "service": "allinoneforensics", "demo": True}
+
+
+@app.get("/demo", response_class=HTMLResponse)
+def demo_view():
+    return render_demo()
+
+
+@app.get("/api/v1/demo")
+def demo_api():
+    return demo_payload()
 
 
 @app.get("/", response_class=HTMLResponse)
