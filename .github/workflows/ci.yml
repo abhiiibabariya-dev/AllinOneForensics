@@ -67,7 +67,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install runtime and test dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" pyyaml
       - name: Validate environment matrix
         run: python scripts/smoke-env.py
       - name: Validate Render YAML
