@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.3.0"]
+dev = ["pytest>=8.0", "ruff>=0.3.0", "httpx2>=0.1.0"]
 windows = ["python-evtx>=0.7.4"]
 memory = ["volatility3>=2.5.0"]
 yara = ["yara-python>=4.5.0"]
